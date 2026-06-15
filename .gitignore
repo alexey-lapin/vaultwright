@@ -1,0 +1,4 @@
+/bin/
+# Sealed outputs produced by `forge seal`.
+*.vault
+*.warden
