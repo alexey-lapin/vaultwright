@@ -1,4 +1,5 @@
 /bin/
-# Sealed outputs produced by `forge seal`.
+# Sealed outputs produced by `vaultwright seal`.
 *.vault
 *.warden
+/.idea/

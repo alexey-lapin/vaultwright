@@ -1,4 +1,4 @@
-# cypembed
+# vaultwright
 
 Serve a folder of static files from a **single binary** where the files are
 **embedded and encrypted**, so the binary on disk reveals nothing about what's
@@ -11,26 +11,26 @@ After unlock the files are served from memory on a random loopback port.
 
 | Binary | Holds | Role |
 |--------|-------|------|
-| `forge` | nothing | Stateless builder. Each `forge seal` mints a fresh keypair and emits the pair below, then forgets the keypair. |
+| `vaultwright` | nothing | Stateless builder. Each `vaultwright seal` mints a fresh keypair and emits the pair below, then forgets the keypair. |
 | `*.vault` | public key + encrypted assets | The server you run/distribute. |
 | `*.warden` | private key | The **second factor** — keep it on a trusted machine. |
 
 ## Build
 
 ```sh
-make            # builds the darwin/arm64 stubs, then bin/forge
+make            # builds the darwin/arm64 stubs, then bin/vaultwright
 ```
 
-`forge` embeds the two stubs and the wordlist; the stubs are compiled first
-because `forge` bakes them in. (Target is darwin/arm64 for now.)
+`vaultwright` embeds the two stubs and the wordlist; the stubs are compiled first
+because `vaultwright` bakes them in. (Target is darwin/arm64 for now.)
 
-**Stub files & git.** `internal/forgeasset/{vault,warden}.stub` are committed as
+**Stub files & git.** `internal/builtin/{vault,warden}.stub` are committed as
 small text *placeholders* so `go build ./...` works on a fresh clone; `make`
 overwrites them with real (multi-MB) compiled binaries. To keep those local
 rebuilds from showing up as changes, mark them skip-worktree after cloning:
 
 ```sh
-git update-index --skip-worktree internal/forgeasset/vault.stub internal/forgeasset/warden.stub
+git update-index --skip-worktree internal/builtin/vault.stub internal/builtin/warden.stub
 ```
 
 Never commit the built stubs. `make clean` restores the placeholders.
@@ -39,7 +39,7 @@ Never commit the built stubs. `make clean` restores the placeholders.
 
 ```sh
 # 1. Seal a directory (prompts for a password, twice):
-bin/forge seal ./site -o demo
+bin/vaultwright seal ./site -o demo
 #   → demo.vault   (run / distribute)
 #   → demo.warden  (keep on your trusted machine)
 
@@ -74,7 +74,7 @@ typing words (e.g. `aban` → `abandon`); a mistyped word is caught by the check
 | `--entry-point` | `index.html` | Directory document served at the root. |
 | `--fallback` | off | Serve the entry-point for unmatched non-file routes (SPA refresh/deep links). |
 
-### `forge seal` flags
+### `vaultwright seal` flags
 
 | Flag | Meaning |
 |------|---------|

@@ -1,4 +1,4 @@
-// Command vault is the sealed server stub. forge appends an encrypted payload to
+// Command vault is the sealed server stub. vaultwright appends an encrypted payload to
 // a copy of this binary; at runtime it unlocks with a password plus a fresh
 // challenge-response with the matching warden, then serves the files from memory.
 package main
@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"cypembed/internal/blob"
-	"cypembed/internal/prompt"
-	"cypembed/internal/scheme"
-	"cypembed/internal/serve"
-	"cypembed/internal/wordcodec"
+	"vaultwright/internal/blob"
+	"vaultwright/internal/prompt"
+	"vaultwright/internal/scheme"
+	"vaultwright/internal/serve"
+	"vaultwright/internal/wordcodec"
 )
 
 const passwordAttempts = 3
@@ -42,7 +42,7 @@ func main() {
 func run(idle time.Duration, port int, addr string, pathKey bool, entry string, fallback bool) error {
 	payload, err := blob.ReadSelf()
 	if err != nil {
-		return fmt.Errorf("%w (this binary was not produced by `forge seal`)", err)
+		return fmt.Errorf("%w (this binary was not produced by `vaultwright seal`)", err)
 	}
 
 	meta, err := unlockMeta(payload)

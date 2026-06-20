@@ -1,4 +1,4 @@
-// Command forge is the stateless builder. `forge seal <dir>` mints a fresh
+// Command vaultwright is the stateless builder. `vaultwright seal <dir>` mints a fresh
 // keypair, encrypts the directory, and writes a matched pair of binaries:
 // <name>.vault (the server) and <name>.warden (the responder / second factor).
 // It then forgets the keypair — no secret is stored anywhere.
@@ -11,10 +11,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"cypembed/internal/blob"
-	"cypembed/internal/forgeasset"
-	"cypembed/internal/prompt"
-	"cypembed/internal/scheme"
+	"vaultwright/internal/blob"
+	"vaultwright/internal/builtin"
+	"vaultwright/internal/prompt"
+	"vaultwright/internal/scheme"
 )
 
 func main() {
@@ -23,16 +23,16 @@ func main() {
 		os.Exit(2)
 	}
 	if err := seal(os.Args[2:]); err != nil {
-		fmt.Fprintln(os.Stderr, "forge:", err)
+		fmt.Fprintln(os.Stderr, "vaultwright:", err)
 		os.Exit(1)
 	}
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `forge — build an encrypted, embedded static-file server
+	fmt.Fprint(os.Stderr, `vaultwright — build an encrypted, embedded static-file server
 
 usage:
-  forge seal <assets-dir> [-o name] [--warden-pass]
+  vaultwright seal <assets-dir> [-o name] [--warden-pass]
 
 flags:
   -o name        output base name (default: the assets dir name)
@@ -49,7 +49,7 @@ func seal(args []string) error {
 	if err != nil {
 		return err
 	}
-	if !forgeasset.StubsBuilt() {
+	if !builtin.StubsBuilt() {
 		return errors.New("stubs are placeholders — run `make` to build the vault/warden stubs first")
 	}
 	info, err := os.Stat(dir)
@@ -72,7 +72,7 @@ func seal(args []string) error {
 		}
 	}
 
-	vaultPayload, wardenPayload, err := scheme.Seal(dir, forgeasset.Wordlist, password, wardenPass)
+	vaultPayload, wardenPayload, err := scheme.Seal(dir, builtin.Wordlist, password, wardenPass)
 	wipe(password)
 	wipe(wardenPass)
 	if err != nil {
@@ -81,10 +81,10 @@ func seal(args []string) error {
 
 	vaultPath := out + ".vault"
 	wardenPath := out + ".warden"
-	if err := blob.WriteSealedBytes(forgeasset.VaultStub, vaultPath, vaultPayload); err != nil {
+	if err := blob.WriteSealedBytes(builtin.VaultStub, vaultPath, vaultPayload); err != nil {
 		return err
 	}
-	if err := blob.WriteSealedBytes(forgeasset.WardenStub, wardenPath, wardenPayload); err != nil {
+	if err := blob.WriteSealedBytes(builtin.WardenStub, wardenPath, wardenPayload); err != nil {
 		return err
 	}
 

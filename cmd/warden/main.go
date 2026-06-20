@@ -1,4 +1,4 @@
-// Command warden is the responder stub — the second factor. forge appends the
+// Command warden is the responder stub — the second factor. vaultwright appends the
 // (obfuscated or passphrase-encrypted) private key to a copy of this binary. Run
 // it on your trusted machine: paste the vault's challenge, get the response.
 package main
@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 
-	"cypembed/internal/blob"
-	"cypembed/internal/prompt"
-	"cypembed/internal/scheme"
-	"cypembed/internal/wordcodec"
+	"vaultwright/internal/blob"
+	"vaultwright/internal/prompt"
+	"vaultwright/internal/scheme"
+	"vaultwright/internal/wordcodec"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 func run() error {
 	payload, err := blob.ReadSelf()
 	if err != nil {
-		return fmt.Errorf("%w (this binary was not produced by `forge seal`)", err)
+		return fmt.Errorf("%w (this binary was not produced by `vaultwright seal`)", err)
 	}
 
 	var pass []byte

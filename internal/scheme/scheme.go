@@ -9,9 +9,9 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"cypembed/internal/archive"
-	"cypembed/internal/blob"
-	"cypembed/internal/cryptocore"
+	"vaultwright/internal/archive"
+	"vaultwright/internal/blob"
+	"vaultwright/internal/cryptocore"
 )
 
 const pkLen = 32 // X25519 public/private key length
@@ -20,7 +20,7 @@ const pkLen = 32 // X25519 public/private key length
 // It lives in the binary, so this is obfuscation (not encryption) by design —
 // the warden binary's security rests on possession, as agreed.
 func wardenStaticKey() []byte {
-	h := sha256.Sum256([]byte("cypembed/warden-static-obfuscation/v1"))
+	h := sha256.Sum256([]byte("vaultwright/warden-static-obfuscation/v1"))
 	return h[:]
 }
 

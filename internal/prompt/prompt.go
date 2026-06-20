@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/term"
 
-	"cypembed/internal/wordcodec"
+	"vaultwright/internal/wordcodec"
 )
 
 // Password reads a line without echoing it.

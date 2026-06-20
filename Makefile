@@ -1,25 +1,25 @@
-# cypembed build.
+# vaultwright build.
 #
-# The stubs must be compiled before forge, because forge embeds them. `make`
-# builds the darwin/arm64 stubs into internal/forgeasset, then builds forge.
+# The stubs must be compiled before vaultwright, because vaultwright embeds them. `make`
+# builds the darwin/arm64 stubs into internal/builtin, then builds vaultwright.
 
 GOFLAGS  := -trimpath
 LDFLAGS  := -s -w
-STUBDIR  := internal/forgeasset
+STUBDIR  := internal/builtin
 GOOS     ?= darwin
 GOARCH   ?= arm64
 
-.PHONY: all stubs forge clean test
+.PHONY: all stubs vaultwright clean test
 
-all: forge
+all: vaultwright
 
 stubs:
 	rm -f $(STUBDIR)/vault.stub $(STUBDIR)/warden.stub
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(STUBDIR)/vault.stub ./cmd/vault
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(STUBDIR)/warden.stub ./cmd/warden
 
-forge: stubs
-	go build $(GOFLAGS) -o bin/forge ./cmd/forge
+vaultwright: stubs
+	go build $(GOFLAGS) -o bin/vaultwright ./cmd/vaultwright
 
 test:
 	go test ./...

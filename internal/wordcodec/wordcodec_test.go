@@ -9,7 +9,7 @@ import (
 
 func testList(t testing.TB) *List {
 	t.Helper()
-	b, err := os.ReadFile("../forgeasset/english.txt")
+	b, err := os.ReadFile("../builtin/english.txt")
 	if err != nil {
 		t.Fatalf("read wordlist: %v", err)
 	}

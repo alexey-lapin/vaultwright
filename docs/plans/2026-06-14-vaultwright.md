@@ -1,4 +1,4 @@
-# cypembed — encrypted embedded static-file server
+# vaultwright — encrypted embedded static-file server
 
 **Date:** 2026-06-14
 **Status:** Design complete, ready to implement
@@ -29,15 +29,15 @@ loopback port.
 
 | Binary | Holds | Role |
 |--------|-------|------|
-| **`forge`** | nothing (stateless) | Builder. `forge seal <dir>` mints a fresh keypair, encrypts assets, emits `vault` + `warden`, then forgets the keypair. Carries the two stubs. |
+| **`vaultwright`** | nothing (stateless) | Builder. `vaultwright seal <dir>` mints a fresh keypair, encrypts assets, emits `vault` + `warden`, then forgets the keypair. Carries the two stubs. |
 | **`vault`** | `pk` + encrypted assets | The server you run/distribute. Public material only. |
 | **`warden`** | `sk` + responder logic | The second factor. Kept on a trusted machine. Paste challenge → prints response. |
 
-Each `forge seal` produces a **fresh keypair** ⇒ per-vault isolation. Compromising
+Each `vaultwright seal` produces a **fresh keypair** ⇒ per-vault isolation. Compromising
 one `warden` exposes only its matching `vault`. No shared keystore, no global secret.
 
 ```
-forge seal ./assets -o myapp
+vaultwright seal ./assets -o myapp
    → myapp.vault     (run / distribute)
    → myapp.warden    (keep on trusted machine — the 2nd factor)
 ```
@@ -51,7 +51,7 @@ Initial target platform: **darwin/arm64 only** (one stub each for vault + warden
 ```
 P    = Argon2id(password, salt)                  # factor 1: operator
 sk, pk                                           # fresh X25519 keypair per seal
-S    = HKDF(sk, "cypembed/asset-share/v1")       # 16 bytes; factor 2 lives in warden
+S    = HKDF(sk, "vaultwright/asset-share/v1")       # 16 bytes; factor 2 lives in warden
 K_a  = HKDF(S ‖ P)                               # asset key
 assets_ct = XChaCha20-Poly1305(K_a, files)
 ```
@@ -98,8 +98,8 @@ short. Residual risk: `warden` is an oracle for `S` (still needs the password to
 
 ## 6. Build mechanism (stub append)
 
-`forge` ships with precompiled **vault-stub** and **warden-stub** (darwin/arm64).
-`forge seal`:
+`vaultwright` ships with precompiled **vault-stub** and **warden-stub** (darwin/arm64).
+`vaultwright seal`:
 1. Prompt password (twice); optional `--warden-pass`.
 2. Generate `(sk, pk)`, derive `S`, `K_a`; build `salt ‖ meta_ct ‖ asset_ct`.
 3. Copy vault-stub, append the vault blob + small length trailer → `*.vault`.
@@ -108,6 +108,9 @@ short. Residual risk: `warden` is an oracle for `S` (still needs the password to
 
 At runtime each stub opens `os.Executable()`, reads the trailer, loads its blob.
 Stubs built with `-ldflags="-s -w"` to trim generic Go fingerprints.
+
+v1 emits darwin/arm64 only. Multi-target (independent vault/warden targets,
+on-demand stub download) is specified in **§13**.
 
 ## 7. Runtime serving (`vault`, after unlock)
 
@@ -135,7 +138,7 @@ Open in a private browser window. Ctrl-C to stop (auto-stops after 15m idle).
 ## 8. CLIs
 
 ```
-forge seal <dir> [-o name] [--warden-pass]   # → name.vault + name.warden
+vaultwright seal <dir> [-o name] [--warden-pass]   # → name.vault + name.warden
 vault   (the produced binary)
    --idle 15m        # idle auto-shutdown (0 = never)
    --port N               # override random port
@@ -162,7 +165,7 @@ checksum validation (typos flagged before any crypto runs).
   rejected; byte-flip tamper in `meta_ct`/`asset_ct` fails; word codec round-trip +
   checksum detects single-word errors + rejects unknown words (**fuzz** the codec);
   replay (old response vs fresh `e_pk`) fails.
-- **Integration:** `forge seal` a fixture → drive full handshake programmatically →
+- **Integration:** `vaultwright seal` a fixture → drive full handshake programmatically →
   `vault` serves → HTTP GET matches original; bare port → 404; idle timeout fires.
 - **Unscannability guard:** assert produced `vault` bytes contain no BIP39 words and
   none of the fixture filenames/content.
@@ -173,8 +176,8 @@ Status: **all complete** (2026-06-14). `go test ./...` passes; full ceremony
 verified end-to-end through the sealed binaries (challenge → warden → response →
 HTTP fetch).
 
-- [x] Scaffold Go module + layout: `cmd/forge`, `cmd/vault`, `cmd/warden`,
-      `internal/{cryptocore,wordcodec,blob,serve,archive,scheme,prompt,forgeasset}`. `Makefile`.
+- [x] Scaffold Go module + layout: `cmd/vaultwright`, `cmd/vault`, `cmd/warden`,
+      `internal/{cryptocore,wordcodec,blob,serve,archive,scheme,prompt,builtin}`. `Makefile`.
 - [x] `internal/cryptocore`: Argon2id, HKDF (stdlib `crypto/hkdf`), X25519 DH,
       XChaCha20-Poly1305; `K_a` derivation; handshake. Unit + tamper + replay tests.
 - [x] `internal/wordcodec`: BIP39 encode/decode + checksum + prefix expansion
@@ -189,15 +192,118 @@ HTTP fetch).
 - [x] `internal/prompt`: no-echo password + word-phrase entry (prefix expansion, checksum).
 - [x] `vault` stub: load blob → password (3 tries) → challenge → response → serve.
 - [x] `warden` stub: load `sk` (optional passphrase) → challenge prompt → response.
-- [x] `forge seal`: keypair gen, encrypt, append blobs to both stubs, zeroize.
+- [x] `vaultwright seal`: keypair gen, encrypt, append blobs to both stubs, zeroize.
 - [x] Build wiring: compile vault/warden stubs (darwin/arm64, `-s -w`), embed into
-      `forge` via `internal/forgeasset`. `make` target with stub-before-forge ordering.
+      `vaultwright` via `internal/builtin`. `make` target with stub-before-vaultwright ordering.
 - [x] Integration test + unscannability guard (`TestPayloadUnscannable`).
 - [x] README: ceremony walkthrough, flags, security model, limitations.
 
 ## 12. Future enhancements (out of v1)
 
-- Cross-platform stubs (linux, windows, other arches).
+- Multi-target builds — **specified in §13** (hybrid stub registry + download).
 - Optional `warden` passphrase hardening via OS keychain.
 - macOS Keychain / Secure Enclave option for `sk`.
 - Hardware-key (FIDO2 `hmac-secret`) factor as an alternative to the word handshake.
+
+## 13. Multi-target builds & distribution (hybrid stub registry)
+
+### Key insight: the payload is platform-independent
+
+The keypair and the payload (`salt ‖ meta_ct ‖ asset_ct`) are pure data — only the
+*stub* differs per OS/arch. So one `seal` makes **one keypair + one vault-payload +
+one warden-payload**, then stamps each payload onto however many stubs you ask for.
+vault and warden never interoperate as binaries (they talk through the human typing
+words), so their targets are **fully independent and multi-valued**: e.g. vault for
+`windows/amd64` + `linux/arm64`, warden for `darwin/arm64`, all sharing one keypair,
+all interoperable.
+
+### CLI
+
+```
+vaultwright seal ./site -o demo \
+    --vault-target windows/amd64 --vault-target linux/arm64 \
+    --warden-target darwin/arm64
+# → demo.vault-windows-amd64.exe   demo.vault-linux-arm64   demo.warden-darwin-arm64
+```
+
+Repeatable `--vault-target` / `--warden-target`, each defaulting to the host. `.exe`
+auto-appended for `windows`. One keypair behind all outputs.
+
+### Stub registry (matrix = data, not code)
+
+Stubs are indexed by role × os × arch and embedded as a *directory*, so adding a
+platform is dropping a file, not changing code:
+
+```
+internal/builtin/stubs/
+  vault/   darwin_arm64.stub  linux_arm64.stub  windows_amd64.stub …
+  warden/  darwin_arm64.stub  …
+//go:embed stubs   →  var stubsFS embed.FS
+```
+
+### Hybrid provisioning (recommended)
+
+Keep `vaultwright` small **and** safe:
+
+- **Embed only the host-platform** vault+warden stubs → the common same-platform
+  seal works fully offline, zero downloads.
+- **Embed a full-matrix checksum manifest** (SHA-256 per stub, a few KB) — this is
+  the **trust root**. Stubs are downloaded on demand from the versioned GitHub
+  release and verified against the embedded hash *before use*. A tampered/MITM'd
+  download is rejected, so transport need not be trusted; `vaultwright`'s own
+  integrity gates everything.
+- **Cache** verified stubs under `~/.cache/vaultwright/stubs/<version>/<role>/<os>_<arch>.stub`.
+
+Resolver order for `resolve(role, os, arch)`:
+
+```
+1. --stub-dir / $VAULTWRIGHT_STUBS         (local mirror / air-gap)
+2. embedded stubs/<role>/<os>_<arch>.stub  (host platform)
+3. local cache                              (~/.cache/vaultwright/stubs/<ver>/…)
+4. download from release → verify sha256 against embedded manifest → cache
+5. error: "no stub for <os>/<arch>; run `vaultwright fetch-stubs` or pass --stub-dir"
+```
+
+### Version pinning (correctness + security)
+
+A stub's blob-reading code must match `vaultwright`'s blob-writing format, so
+`vaultwright` only ever downloads stubs **for its own embedded build version**
+(`vX.Y.Z`). Never mix versions; pinning to the embedded version enforces this.
+
+### CI release pipeline (ordering resolves the chicken-and-egg)
+
+`vaultwright` embeds hashes *of* the stubs, so stubs are built first:
+
+```
+tag vX.Y.Z → GitHub Actions:
+  1. matrix cross-compile cmd/vault, cmd/warden → stubs/<role>/<os>_<arch>.stub  (-trimpath -s -w)
+  2. generate SHA256SUMS manifest
+  3. build vaultwright embedding (manifest + version "vX.Y.Z" + host stubs)
+  4. upload stubs + manifest + vaultwright binaries to release vX.Y.Z
+```
+
+Reproducible builds (`-trimpath`) so published hashes are independently verifiable.
+
+### Offline support
+
+- Host target always works embedded (no network).
+- `vaultwright fetch-stubs [--all | <targets>]` pre-populates the cache before going offline.
+- `--stub-dir` / `$VAULTWRIGHT_STUBS` points at a local/air-gapped mirror.
+
+### Portability & signing
+
+- The append-overlay trick works on **Mach-O, ELF, and PE** — all ignore trailing
+  bytes after their declared structures. `os.Executable` self-read is portable.
+- Appending an overlay **invalidates code signatures** (macOS hardened runtime,
+  Windows Authenticode). If signing, sign each *output* after sealing, never the stub.
+
+### Implementation steps (multi-target)
+
+- [ ] Stub registry: `internal/builtin` embeds `stubs/` (embed.FS) + host stubs;
+      `Resolve(role, os, arch)` with the order above.
+- [ ] Checksum manifest: embed `SHA256SUMS` + build version; verify after download.
+- [ ] Downloader + cache (`~/.cache/vaultwright/...`), HTTPS, hash-gated.
+- [ ] CLI: repeatable `--vault-target`/`--warden-target`, `.exe` suffix, output naming,
+      `--stub-dir`, `fetch-stubs` subcommand.
+- [ ] Makefile: `VAULT_TARGETS` / `WARDEN_TARGETS` matrix → `stubs/`; manifest gen.
+- [ ] GitHub Actions release workflow (steps above); `-trimpath` reproducibility.

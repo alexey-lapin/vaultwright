@@ -3,7 +3,7 @@
 // is sensitive (a plaintext copy is the biggest scannability fingerprint), so it
 // is supplied at runtime from the caller's decrypted blob.
 //
-// Sizes used by cypembed: a 32-byte challenge -> 24 words, a 16-byte response -> 12.
+// Sizes used by vaultwright: a 32-byte challenge -> 24 words, a 16-byte response -> 12.
 package wordcodec
 
 import (

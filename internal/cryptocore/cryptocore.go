@@ -1,4 +1,4 @@
-// Package cryptocore holds the cryptographic primitives for cypembed:
+// Package cryptocore holds the cryptographic primitives for vaultwright:
 // password hardening, the per-seal key hierarchy, the authenticated-encryption
 // envelope, and the fresh ephemeral challenge-response handshake.
 //
@@ -6,7 +6,7 @@
 //
 //	P    = Argon2id(password, salt)              -- factor 1 (operator)
 //	sk,pk                                        -- fresh X25519 keypair per seal
-//	S    = HKDF(sk, "cypembed/asset-share/v1")   -- 16 bytes; factor 2 lives in warden
+//	S    = HKDF(sk, "vaultwright/asset-share/v1")   -- 16 bytes; factor 2 lives in warden
 //	K_a  = HKDF(S || P)                          -- asset key
 package cryptocore
 
@@ -39,9 +39,9 @@ const (
 
 // info labels for HKDF derivations; distinct labels domain-separate the outputs.
 const (
-	infoShare   = "cypembed/asset-share/v1"
-	infoAssetK  = "cypembed/asset-key/v1"
-	infoRespPad = "cypembed/response-pad/v1"
+	infoShare   = "vaultwright/asset-share/v1"
+	infoAssetK  = "vaultwright/asset-key/v1"
+	infoRespPad = "vaultwright/response-pad/v1"
 )
 
 // NewSalt returns a fresh random salt.

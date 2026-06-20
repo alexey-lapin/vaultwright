@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cypembed/internal/wordcodec"
+	"vaultwright/internal/wordcodec"
 )
 
 func loadWordlist(t testing.TB) []byte {
 	t.Helper()
-	b, err := os.ReadFile("../forgeasset/english.txt")
+	b, err := os.ReadFile("../builtin/english.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestWrongWardenProducesUndecryptableAssets(t *testing.T) {
 	}
 }
 
-// TestPayloadUnscannable guards the core requirement: the bytes forge appends to
+// TestPayloadUnscannable guards the core requirement: the bytes vaultwright appends to
 // the vault stub must reveal neither the asset content nor the (plaintext) wordlist.
 func TestPayloadUnscannable(t *testing.T) {
 	dir := t.TempDir()

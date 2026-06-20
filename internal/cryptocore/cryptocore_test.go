@@ -13,7 +13,7 @@ func TestHandshakeRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Seal time (forge): derive everything and encrypt some assets.
+	// Seal time (vaultwright): derive everything and encrypt some assets.
 	sk, err := NewKeyPair()
 	if err != nil {
 		t.Fatal(err)
