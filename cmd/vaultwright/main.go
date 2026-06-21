@@ -6,19 +6,17 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/alexey-lapin/vaultwright/internal/blob"
 	"github.com/alexey-lapin/vaultwright/internal/builtin"
 	"github.com/alexey-lapin/vaultwright/internal/prompt"
 	"github.com/alexey-lapin/vaultwright/internal/scheme"
+	"github.com/alexey-lapin/vaultwright/internal/stubs"
 )
-
-// version is set at release time via -ldflags "-X main.version=vX.Y.Z".
-var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -27,7 +25,7 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "version", "--version", "-v":
-		fmt.Println("vaultwright", version)
+		fmt.Println("vaultwright", builtin.Version)
 		return
 	case "seal":
 		if err := seal(os.Args[2:]); err != nil {
@@ -62,8 +60,14 @@ func seal(args []string) error {
 	if err != nil {
 		return err
 	}
-	if !builtin.StubsBuilt() {
-		return errors.New("stubs are placeholders — run `make` to build the vault/warden stubs first")
+	// For now seal targets the host platform; multi-target lands in a later slice.
+	vaultStub, err := stubs.Resolve(stubs.RoleVault, runtime.GOOS, runtime.GOARCH, stubs.Options{})
+	if err != nil {
+		return err
+	}
+	wardenStub, err := stubs.Resolve(stubs.RoleWarden, runtime.GOOS, runtime.GOARCH, stubs.Options{})
+	if err != nil {
+		return err
 	}
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
@@ -94,10 +98,10 @@ func seal(args []string) error {
 
 	vaultPath := out + ".vault"
 	wardenPath := out + ".warden"
-	if err := blob.WriteSealedBytes(builtin.VaultStub, vaultPath, vaultPayload); err != nil {
+	if err := blob.WriteSealedBytes(vaultStub, vaultPath, vaultPayload); err != nil {
 		return err
 	}
-	if err := blob.WriteSealedBytes(builtin.WardenStub, wardenPath, wardenPayload); err != nil {
+	if err := blob.WriteSealedBytes(wardenStub, wardenPath, wardenPayload); err != nil {
 		return err
 	}
 
