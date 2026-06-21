@@ -17,6 +17,15 @@ import (
 //go:embed english.txt
 var Wordlist []byte
 
+// manifestBytes is the SHA-256 manifest of release stubs (one "<hash>  <path>" line
+// per stub). A placeholder in source control; the real one is embedded at release.
+//
+//go:embed SHA256SUMS
+var manifestBytes []byte
+
+// Manifest returns the embedded SHA-256 stub manifest.
+func Manifest() []byte { return manifestBytes }
+
 // stubsFS holds whatever stubs were present at build time, as stubs/<role>/<os>_<arch>.stub.
 //
 //go:embed stubs
