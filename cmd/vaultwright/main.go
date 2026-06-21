@@ -1,7 +1,7 @@
-// Command vaultwright is the stateless builder. `vaultwright seal <dir>` mints a fresh
-// keypair, encrypts the directory, and writes a matched pair of binaries:
-// <name>.vault (the server) and <name>.warden (the responder / second factor).
-// It then forgets the keypair — no secret is stored anywhere.
+// Command vaultwright is the stateless builder. `vaultwright seal <dir>` mints a
+// fresh keypair, encrypts the directory, and writes matched vault + warden binaries
+// for one or more target platforms. It then forgets the keypair — no secret is
+// stored anywhere.
 package main
 
 import (
@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/alexey-lapin/vaultwright/internal/blob"
 	"github.com/alexey-lapin/vaultwright/internal/builtin"
@@ -23,18 +24,22 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+	var err error
 	switch os.Args[1] {
 	case "version", "--version", "-v":
 		fmt.Println("vaultwright", builtin.Version)
 		return
 	case "seal":
-		if err := seal(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "vaultwright:", err)
-			os.Exit(1)
-		}
+		err = seal(os.Args[2:])
+	case "fetch-stubs":
+		err = fetchStubs(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vaultwright:", err)
+		os.Exit(1)
 	}
 }
 
@@ -42,39 +47,68 @@ func usage() {
 	fmt.Fprint(os.Stderr, `vaultwright — build an encrypted, embedded static-file server
 
 usage:
-  vaultwright seal <assets-dir> [-o name] [--warden-pass]
+  vaultwright seal <assets-dir> [flags]
+  vaultwright fetch-stubs [--all | <os>/<arch> ...] [--stub-dir dir]
   vaultwright version
 
-flags:
-  -o name        output base name (default: the assets dir name)
-  --warden-pass  also protect the warden binary with a passphrase (prompted)
+seal flags:
+  -o name              output base name (default: the assets dir name)
+  --warden-pass        also protect the warden binary with a passphrase (prompted)
+  --vault-target os/arch    vault target (repeatable; default: host)
+  --warden-target os/arch   warden target (repeatable; default: host)
+  --stub-dir dir       resolve stubs from this directory first
+  --offline            never download stubs (embedded/cache/stub-dir only)
 
-produces:
+produces (host default):
   <name>.vault   the server you run/distribute (public key + encrypted assets)
   <name>.warden  the responder you keep on a trusted machine (the 2nd factor)
+with explicit targets the outputs are suffixed, e.g. <name>.vault-linux-arm64,
+and .exe is added for windows.
 `)
 }
 
+type sealOpts struct {
+	dir           string
+	out           string
+	wardenPass    bool
+	stubDir       string
+	offline       bool
+	vaultTargets  []stubs.Target
+	wardenTargets []stubs.Target
+}
+
 func seal(args []string) error {
-	dir, out, wantWardenPass, err := parseSealArgs(args)
+	o, err := parseSealArgs(args)
 	if err != nil {
 		return err
 	}
-	// For now seal targets the host platform; multi-target lands in a later slice.
-	vaultStub, err := stubs.Resolve(stubs.RoleVault, runtime.GOOS, runtime.GOARCH, stubs.Options{})
-	if err != nil {
-		return err
-	}
-	wardenStub, err := stubs.Resolve(stubs.RoleWarden, runtime.GOOS, runtime.GOARCH, stubs.Options{})
-	if err != nil {
-		return err
-	}
-	info, err := os.Stat(dir)
+	info, err := os.Stat(o.dir)
 	if err != nil || !info.IsDir() {
-		return fmt.Errorf("assets path %q is not a directory", dir)
+		return fmt.Errorf("assets path %q is not a directory", o.dir)
 	}
-	if out == "" {
-		out = filepath.Base(filepath.Clean(dir))
+	if o.out == "" {
+		o.out = filepath.Base(filepath.Clean(o.dir))
+	}
+
+	// Explicit targets get suffixed output names; the plain host default does not.
+	vaultSuffixed := len(o.vaultTargets) > 0
+	wardenSuffixed := len(o.wardenTargets) > 0
+	if !vaultSuffixed {
+		o.vaultTargets = []stubs.Target{hostTarget(stubs.RoleVault)}
+	}
+	if !wardenSuffixed {
+		o.wardenTargets = []stubs.Target{hostTarget(stubs.RoleWarden)}
+	}
+
+	// Resolve every stub up front so we fail before prompting for a password.
+	resOpt := stubs.Options{StubDir: o.stubDir, Offline: o.offline}
+	vaultStubs, err := resolveAll(stubs.RoleVault, o.vaultTargets, resOpt)
+	if err != nil {
+		return err
+	}
+	wardenStubs, err := resolveAll(stubs.RoleWarden, o.wardenTargets, resOpt)
+	if err != nil {
+		return err
 	}
 
 	password, err := readNewPassword("Password (for the vault): ")
@@ -82,56 +116,185 @@ func seal(args []string) error {
 		return err
 	}
 	var wardenPass []byte
-	if wantWardenPass {
+	if o.wardenPass {
 		wardenPass, err = readNewPassword("Warden passphrase: ")
 		if err != nil {
 			return err
 		}
 	}
 
-	vaultPayload, wardenPayload, err := scheme.Seal(dir, builtin.Wordlist, password, wardenPass)
+	// One keypair / one payload-pair, stamped onto every requested stub.
+	vaultPayload, wardenPayload, err := scheme.Seal(o.dir, builtin.Wordlist, password, wardenPass)
 	wipe(password)
 	wipe(wardenPass)
 	if err != nil {
 		return err
 	}
 
-	vaultPath := out + ".vault"
-	wardenPath := out + ".warden"
-	if err := blob.WriteSealedBytes(vaultStub, vaultPath, vaultPayload); err != nil {
+	var produced []string
+	write := func(targets []stubs.Target, stubBytes [][]byte, payload []byte, suffixed bool) error {
+		for i, t := range targets {
+			path := outName(o.out, t, suffixed)
+			if err := blob.WriteSealedBytes(stubBytes[i], path, payload); err != nil {
+				return err
+			}
+			produced = append(produced, path)
+		}
+		return nil
+	}
+	if err := write(o.vaultTargets, vaultStubs, vaultPayload, vaultSuffixed); err != nil {
 		return err
 	}
-	if err := blob.WriteSealedBytes(wardenStub, wardenPath, wardenPayload); err != nil {
+	if err := write(o.wardenTargets, wardenStubs, wardenPayload, wardenSuffixed); err != nil {
 		return err
 	}
 
-	fmt.Printf("Sealed.\n  %s   (run / distribute)\n  %s  (keep on your trusted machine — the 2nd factor)\n", vaultPath, wardenPath)
+	fmt.Println("Sealed:")
+	for _, p := range produced {
+		fmt.Println("  " + p)
+	}
 	return nil
 }
 
-func parseSealArgs(args []string) (dir, out string, wardenPass bool, err error) {
+func resolveAll(role string, targets []stubs.Target, opt stubs.Options) ([][]byte, error) {
+	out := make([][]byte, len(targets))
+	for i, t := range targets {
+		b, err := stubs.Resolve(role, t.OS, t.Arch, opt)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = b
+	}
+	return out, nil
+}
+
+// outName builds an output path: <base>.<role>[-<os>-<arch>][.exe].
+func outName(base string, t stubs.Target, suffixed bool) string {
+	name := base + "." + t.Role
+	if suffixed {
+		name += "-" + t.OS + "-" + t.Arch
+	}
+	if t.OS == "windows" {
+		name += ".exe"
+	}
+	return name
+}
+
+func hostTarget(role string) stubs.Target {
+	return stubs.Target{Role: role, OS: runtime.GOOS, Arch: runtime.GOARCH}
+}
+
+func parseSealArgs(args []string) (sealOpts, error) {
+	var o sealOpts
 	var positional []string
+	need := func(i int) (string, error) {
+		if i+1 >= len(args) {
+			return "", fmt.Errorf("%s needs a value", args[i])
+		}
+		return args[i+1], nil
+	}
 	for i := 0; i < len(args); i++ {
-		switch args[i] {
+		a := args[i]
+		switch a {
 		case "-o", "--output":
-			if i+1 >= len(args) {
-				return "", "", false, fmt.Errorf("%s needs a value", args[i])
+			v, err := need(i)
+			if err != nil {
+				return o, err
+			}
+			o.out, i = v, i+1
+		case "--warden-pass":
+			o.wardenPass = true
+		case "--offline":
+			o.offline = true
+		case "--stub-dir":
+			v, err := need(i)
+			if err != nil {
+				return o, err
+			}
+			o.stubDir, i = v, i+1
+		case "--vault-target", "--warden-target":
+			v, err := need(i)
+			if err != nil {
+				return o, err
 			}
 			i++
-			out = args[i]
-		case "--warden-pass":
-			wardenPass = true
-		default:
-			if len(args[i]) > 0 && args[i][0] == '-' {
-				return "", "", false, fmt.Errorf("unknown flag %q", args[i])
+			goos, goarch, err := parseTarget(v)
+			if err != nil {
+				return o, err
 			}
-			positional = append(positional, args[i])
+			if a == "--vault-target" {
+				o.vaultTargets = append(o.vaultTargets, stubs.Target{Role: stubs.RoleVault, OS: goos, Arch: goarch})
+			} else {
+				o.wardenTargets = append(o.wardenTargets, stubs.Target{Role: stubs.RoleWarden, OS: goos, Arch: goarch})
+			}
+		default:
+			if strings.HasPrefix(a, "-") {
+				return o, fmt.Errorf("unknown flag %q", a)
+			}
+			positional = append(positional, a)
 		}
 	}
 	if len(positional) != 1 {
-		return "", "", false, fmt.Errorf("expected exactly one assets directory")
+		return o, fmt.Errorf("expected exactly one assets directory")
 	}
-	return positional[0], out, wardenPass, nil
+	o.dir = positional[0]
+	return o, nil
+}
+
+func parseTarget(s string) (goos, goarch string, err error) {
+	goos, goarch, ok := strings.Cut(s, "/")
+	if !ok || goos == "" || goarch == "" {
+		return "", "", fmt.Errorf("target %q must be in os/arch form (e.g. linux/arm64)", s)
+	}
+	return goos, goarch, nil
+}
+
+// fetchStubs pre-populates the cache for offline use.
+func fetchStubs(args []string) error {
+	var all bool
+	var stubDir string
+	var targets []stubs.Target
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--all":
+			all = true
+		case a == "--stub-dir":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--stub-dir needs a value")
+			}
+			stubDir, i = args[i+1], i+1
+		case strings.HasPrefix(a, "-"):
+			return fmt.Errorf("unknown flag %q", a)
+		default:
+			goos, goarch, err := parseTarget(a)
+			if err != nil {
+				return err
+			}
+			targets = append(targets,
+				stubs.Target{Role: stubs.RoleVault, OS: goos, Arch: goarch},
+				stubs.Target{Role: stubs.RoleWarden, OS: goos, Arch: goarch})
+		}
+	}
+
+	if all {
+		targets = stubs.ParseManifest(builtin.Manifest()).Entries()
+		if len(targets) == 0 {
+			return fmt.Errorf("manifest is empty (dev build) — nothing to fetch")
+		}
+	}
+	if len(targets) == 0 {
+		return fmt.Errorf("nothing to fetch: pass --all or one or more os/arch")
+	}
+
+	opt := stubs.Options{StubDir: stubDir}
+	for _, t := range targets {
+		if _, err := stubs.Resolve(t.Role, t.OS, t.Arch, opt); err != nil {
+			return fmt.Errorf("%s %s/%s: %w", t.Role, t.OS, t.Arch, err)
+		}
+		fmt.Printf("  ok  %s %s/%s\n", t.Role, t.OS, t.Arch)
+	}
+	return nil
 }
 
 // readNewPassword prompts twice and confirms the two entries match.

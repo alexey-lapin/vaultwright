@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -40,6 +41,44 @@ func ParseManifest(b []byte) Manifest {
 // assetPath is the manifest key for a stub.
 func assetPath(role, goos, goarch string) string {
 	return "stubs/" + role + "/" + goos + "_" + goarch + ".stub"
+}
+
+// Target identifies one stub in the matrix.
+type Target struct {
+	Role, OS, Arch string
+}
+
+// Entries lists every stub the manifest declares, sorted.
+func (m Manifest) Entries() []Target {
+	var out []Target
+	for k := range m {
+		// k = "stubs/<role>/<os>_<arch>.stub"
+		rest, ok := strings.CutPrefix(k, "stubs/")
+		if !ok {
+			continue
+		}
+		rest = strings.TrimSuffix(rest, ".stub")
+		role, osArch, ok := strings.Cut(rest, "/")
+		if !ok {
+			continue
+		}
+		goos, goarch, ok := strings.Cut(osArch, "_")
+		if !ok {
+			continue
+		}
+		out = append(out, Target{Role: role, OS: goos, Arch: goarch})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Role != b.Role {
+			return a.Role < b.Role
+		}
+		if a.OS != b.OS {
+			return a.OS < b.OS
+		}
+		return a.Arch < b.Arch
+	})
+	return out
 }
 
 // Expected returns the expected hash for a stub, if the manifest lists it.
