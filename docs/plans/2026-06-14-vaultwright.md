@@ -305,5 +305,12 @@ Reproducible builds (`-trimpath`) so published hashes are independently verifiab
 - [ ] Downloader + cache (`~/.cache/vaultwright/...`), HTTPS, hash-gated.
 - [ ] CLI: repeatable `--vault-target`/`--warden-target`, `.exe` suffix, output naming,
       `--stub-dir`, `fetch-stubs` subcommand.
-- [ ] Makefile: `VAULT_TARGETS` / `WARDEN_TARGETS` matrix → `stubs/`; manifest gen.
-- [ ] GitHub Actions release workflow (steps above); `-trimpath` reproducibility.
+- [x] Matrix build + manifest: `scripts/build-stubs.sh` (cross-compile `stubs/<role>/<os>_<arch>.stub`
+      + deterministic `dist/SHA256SUMS`); `make stubs-matrix`.
+- [~] GitHub Actions: `.github/workflows/{ci,release}.yml` skeletons in place
+      (`release.yml` builds the matrix + manifest today; the vaultwright-embedding
+      step is a `TODO(§13)` placeholder pending the registry/manifest code).
+      `main.version` ldflag hook added.
+
+Repo scaffolding also added this pass: `LICENSE` (Apache-2.0), `NOTICE`, `SECURITY.md`,
+`.github/renovate.json`, `.gitattributes`, README install/badges/status.

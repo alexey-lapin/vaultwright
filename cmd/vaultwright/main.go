@@ -17,14 +17,26 @@ import (
 	"vaultwright/internal/scheme"
 )
 
+// version is set at release time via -ldflags "-X main.version=vX.Y.Z".
+var version = "dev"
+
 func main() {
-	if len(os.Args) < 2 || os.Args[1] != "seal" {
+	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
 	}
-	if err := seal(os.Args[2:]); err != nil {
-		fmt.Fprintln(os.Stderr, "vaultwright:", err)
-		os.Exit(1)
+	switch os.Args[1] {
+	case "version", "--version", "-v":
+		fmt.Println("vaultwright", version)
+		return
+	case "seal":
+		if err := seal(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "vaultwright:", err)
+			os.Exit(1)
+		}
+	default:
+		usage()
+		os.Exit(2)
 	}
 }
 
@@ -33,6 +45,7 @@ func usage() {
 
 usage:
   vaultwright seal <assets-dir> [-o name] [--warden-pass]
+  vaultwright version
 
 flags:
   -o name        output base name (default: the assets dir name)

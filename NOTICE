@@ -1,0 +1,11 @@
+vaultwright
+Copyright 2026 The vaultwright Authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product embeds the BIP39 English wordlist (internal/builtin/english.txt),
+sourced from the Bitcoin BIPs repository (bitcoin/bips, bip-0039). The wordlist
+is used to encode the challenge/response phrases.
+
+Third-party Go dependencies and their licenses are declared in go.mod / go.sum
+(notably golang.org/x/crypto and golang.org/x/term, BSD-3-Clause).

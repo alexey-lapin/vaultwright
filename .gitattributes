@@ -1,0 +1,2 @@
+*.stub binary
+internal/builtin/english.txt text eol=lf

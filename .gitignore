@@ -1,4 +1,5 @@
 /bin/
+/dist/
 # Sealed outputs produced by `vaultwright seal`.
 *.vault
 *.warden

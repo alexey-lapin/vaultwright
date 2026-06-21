@@ -1,11 +1,30 @@
 # vaultwright
 
+[![CI](https://github.com/OWNER/vaultwright/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/vaultwright/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+> Replace `OWNER` in the badge/install URLs with your GitHub owner once published.
+
 Serve a folder of static files from a **single binary** where the files are
 **embedded and encrypted**, so the binary on disk reveals nothing about what's
 inside. Unlocking requires **two factors**: a password *and* a fresh
 challenge–response with a separate responder binary you keep on a trusted machine.
 
 After unlock the files are served from memory on a random loopback port.
+
+**Status:** v1 (darwin/arm64) works end-to-end. Multi-target builds and on-demand
+stub download are designed in `docs/plans/2026-06-14-vaultwright.md` §13, not yet built.
+
+## Install
+
+```sh
+# From source (host platform):
+make                    # → bin/vaultwright
+# Or, once published:
+go install github.com/OWNER/vaultwright/cmd/vaultwright@latest
+```
+
+See [SECURITY.md](SECURITY.md) for the threat model and how to report issues.
 
 ## Three binaries
 
