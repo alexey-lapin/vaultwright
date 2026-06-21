@@ -10,8 +10,9 @@ challenge–response with a separate responder binary you keep on a trusted mach
 
 After unlock the files are served from memory on a random loopback port.
 
-**Status:** v1 (darwin/arm64) works end-to-end. Multi-target builds and on-demand
-stub download are designed in `docs/plans/2026-06-14-vaultwright.md` §13, not yet built.
+**Status:** works end-to-end. Multi-target builds with on-demand, hash-verified stub
+download are implemented (`docs/plans/2026-06-14-vaultwright.md` §13); the first tagged
+release is still pending.
 
 ## Install
 
@@ -97,6 +98,25 @@ typing words (e.g. `aban` → `abandon`); a mistyped word is caught by the check
 |------|---------|
 | `-o <name>` | Output base name (default: the assets dir name). |
 | `--warden-pass` | Also protect the warden binary with a passphrase (prompted). |
+| `--vault-target os/arch` | Vault target platform (repeatable; default: host). |
+| `--warden-target os/arch` | Warden target platform (repeatable; default: host). |
+| `--stub-dir <dir>` | Resolve stubs from this directory first (offline mirror). |
+| `--offline` | Never download stubs (embedded / cache / `--stub-dir` only). |
+
+Targets are independent and may be repeated, e.g. build a Windows + Linux vault with a
+macOS warden — all from one keypair:
+
+```sh
+vaultwright seal ./site -o demo \
+  --vault-target windows/amd64 --vault-target linux/arm64 \
+  --warden-target darwin/arm64
+# → demo.vault-windows-amd64.exe  demo.vault-linux-arm64  demo.warden-darwin-arm64
+```
+
+With explicit targets the outputs are suffixed (and `.exe` is added for Windows);
+the plain host default writes `demo.vault` / `demo.warden`. Non-host stubs are
+downloaded from the release and verified against the embedded SHA-256 manifest;
+pre-fetch them with `vaultwright fetch-stubs --all` (or `fetch-stubs os/arch …`).
 
 ## How it works
 

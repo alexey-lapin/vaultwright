@@ -297,20 +297,26 @@ Reproducible builds (`-trimpath`) so published hashes are independently verifiab
 - Appending an overlay **invalidates code signatures** (macOS hardened runtime,
   Windows Authenticode). If signing, sign each *output* after sealing, never the stub.
 
-### Implementation steps (multi-target)
+### Implementation steps (multi-target) — DONE 2026-06-21
 
-- [ ] Stub registry: `internal/builtin` embeds `stubs/` (embed.FS) + host stubs;
-      `Resolve(role, os, arch)` with the order above.
-- [ ] Checksum manifest: embed `SHA256SUMS` + build version; verify after download.
-- [ ] Downloader + cache (`~/.cache/vaultwright/...`), HTTPS, hash-gated.
-- [ ] CLI: repeatable `--vault-target`/`--warden-target`, `.exe` suffix, output naming,
-      `--stub-dir`, `fetch-stubs` subcommand.
-- [x] Matrix build + manifest: `scripts/build-stubs.sh` (cross-compile `stubs/<role>/<os>_<arch>.stub`
-      + deterministic `dist/SHA256SUMS`); `make stubs-matrix`.
-- [~] GitHub Actions: `.github/workflows/{ci,release}.yml` skeletons in place
-      (`release.yml` builds the matrix + manifest today; the vaultwright-embedding
-      step is a `TODO(§13)` placeholder pending the registry/manifest code).
-      `main.version` ldflag hook added.
+- [x] **Slice 1** — Stub registry: `internal/builtin` embeds `stubs/<role>/<os>_<arch>.stub`
+      (embed.FS) + `Version`; `internal/stubs.Resolve(role, os, arch, opts)` with the
+      source order above (stub-dir → embedded → cache → download).
+- [x] **Slice 2** — Manifest: embed `SHA256SUMS` (placeholder; real at release);
+      `stubs.Manifest` ParseManifest/Expected/Verify — unlisted stub is never trusted.
+- [x] **Slice 3** — Downloader + cache (`<user cache>/vaultwright/stubs/<ver>/...`),
+      HTTPS, hash-gated; cache re-verified; dev builds refuse to download.
+- [x] **Slice 4** — CLI: repeatable `--vault-target`/`--warden-target`, `--stub-dir`,
+      `--offline`, `.exe` suffix, output naming (plain host vs suffixed), `fetch-stubs
+      [--all | os/arch ...]`.
+- [x] Matrix build + manifest: `scripts/build-stubs.sh` (deterministic `dist/SHA256SUMS`);
+      `make stubs-matrix`.
+- [x] **Slice 5** — `scripts/build-release.sh` embeds per-host stubs + manifest + version
+      and builds `dist/vaultwright-<os>-<arch>`; `release.yml` builds the matrix, the CLI,
+      and uploads all via the native `gh` CLI. `.github/workflows/ci.yml` runs fmt/vet/build/test.
 
-Repo scaffolding also added this pass: `LICENSE` (Apache-2.0), `NOTICE`, `SECURITY.md`,
+Repo scaffolding (earlier pass): `LICENSE` (Apache-2.0), `NOTICE`, `SECURITY.md`,
 `.github/renovate.json`, `.gitattributes`, README install/badges/status.
+
+**Remaining before a real release:** tag `vX.Y.Z` (triggers `release.yml`); verify a
+fresh `vaultwright` downloads a non-host stub from the published release and seals it.
