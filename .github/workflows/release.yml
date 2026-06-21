@@ -1,12 +1,17 @@
 name: Release
 
-# Skeleton release pipeline (see plan §13). Builds the vault/warden stub matrix and
-# a SHA-256 manifest today; the vaultwright-CLI build step is a placeholder until the
-# §13 stub registry + manifest embedding land.
+# Builds the vault/warden stub matrix + SHA-256 manifest and the per-host vaultwright
+# CLI (embedding host stubs + manifest + version), then publishes them to a GitHub
+# Release. Triggered by pushing a v* tag, or manually via workflow_dispatch with a tag.
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and publish (e.g. v0.0.2)"
+        required: true
 
 permissions:
   contents: write # create the GitHub release
@@ -14,6 +19,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # On a tag push this is the tag; on manual dispatch it's the provided input.
+    env:
+      VERSION: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +37,7 @@ jobs:
       # 2. Build the vaultwright CLI per host platform, embedding that host's stubs +
       #    the manifest + the version (see scripts/build-release.sh).
       - name: Build vaultwright CLI
-        run: VERSION="${GITHUB_REF_NAME}" ./scripts/build-release.sh
+        run: ./scripts/build-release.sh # reads $VERSION from the job env
 
       # 3. Publish to the release using the built-in gh CLI (no third-party action).
       #    Stage flat-named copies first: stubs live under stubs/<role>/..., whose
@@ -47,7 +55,10 @@ jobs:
             rel=${f#dist/stubs/}              # e.g. vault/darwin_arm64.stub
             cp "$f" "dist/assets/${rel/\//-}" # → vault-darwin_arm64.stub
           done < <(find dist/stubs -type f -name '*.stub' | sort)
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
+          # --target creates the tag at this commit on manual dispatch; ignored when
+          # the tag already exists (the tag-push case).
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --target "$GITHUB_SHA" \
             --generate-notes \
             dist/assets/*
