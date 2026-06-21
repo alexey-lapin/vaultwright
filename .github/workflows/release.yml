@@ -26,41 +26,26 @@ jobs:
         run: ./scripts/build-stubs.sh
         # → dist/stubs/<role>/<os>_<arch>.stub  and  dist/SHA256SUMS
 
-      # 2. Build the vaultwright CLI per host platform.
-      #    TODO(plan §13): each build must embed
-      #      (a) its host stubs into internal/builtin/stubs/, and
-      #      (b) dist/SHA256SUMS as the trust-root manifest,
-      #    plus  -ldflags "-X main.version=${GITHUB_REF_NAME}".
-      #    The registry + manifest embedding don't exist yet — wire this when §13 lands.
-      - name: Build vaultwright CLI (placeholder until §13)
-        run: |
-          echo "TODO §13: embed host stubs + dist/SHA256SUMS; version=${GITHUB_REF_NAME}"
-          # Intended (per §13):
-          #   for t in $VW_TARGETS; do
-          #     os=${t%/*}; arch=${t#*/}
-          #     cp dist/stubs/vault/${os}_${arch}.stub   internal/builtin/stubs/vault/  || true
-          #     cp dist/stubs/warden/${os}_${arch}.stub  internal/builtin/stubs/warden/ || true
-          #     cp dist/SHA256SUMS internal/builtin/SHA256SUMS
-          #     GOOS=$os GOARCH=$arch go build -trimpath \
-          #       -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
-          #       -o dist/vaultwright-${os}-${arch} ./cmd/vaultwright
-          #   done
+      # 2. Build the vaultwright CLI per host platform, embedding that host's stubs +
+      #    the manifest + the version (see scripts/build-release.sh).
+      - name: Build vaultwright CLI
+        run: VERSION="${GITHUB_REF_NAME}" ./scripts/build-release.sh
 
       # 3. Publish to the release using the built-in gh CLI (no third-party action).
       #    Stubs live under stubs/<role>/..., so flatten to "<role>-<os>_<arch>.stub"
       #    asset names (via gh's "path#name" syntax) to avoid collisions; this is the
-      #    name §13's downloader fetches from releases/download/<tag>/.
+      #    name the downloader fetches from releases/download/<tag>/.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           assets=(dist/SHA256SUMS)
+          for f in dist/vaultwright-*; do assets+=("$f"); done
           while IFS= read -r f; do
             rel=${f#dist/stubs/}         # e.g. vault/darwin_arm64.stub
             assets+=("${f}#${rel/\//-}") # → vault-darwin_arm64.stub
           done < <(find dist/stubs -type f -name '*.stub' | sort)
-          # TODO(§13): also append dist/vaultwright-* once step 2 builds the CLI.
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
