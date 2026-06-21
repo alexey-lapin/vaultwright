@@ -12,7 +12,8 @@ STUBDIR  := internal/builtin/stubs
 GOOS     ?= $(shell go env GOOS)
 GOARCH   ?= $(shell go env GOARCH)
 HOST     := $(GOOS)_$(GOARCH)
-PLACEHOLDER := placeholder: run `make` to build the real stub
+# NOTE: no backticks — they would be shell command substitution in the recipe.
+PLACEHOLDER := placeholder - run make to build this stub
 
 .PHONY: all stubs vaultwright stubs-matrix clean test vet fmt-check
 

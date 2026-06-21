@@ -4,3 +4,4 @@
 *.vault
 *.warden
 /.idea/
+.DS_Store
