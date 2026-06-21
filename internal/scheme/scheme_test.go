@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"vaultwright/internal/wordcodec"
+	"github.com/alexey-lapin/vaultwright/internal/wordcodec"
 )
 
 func loadWordlist(t testing.TB) []byte {

@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"vaultwright/internal/blob"
-	"vaultwright/internal/prompt"
-	"vaultwright/internal/scheme"
-	"vaultwright/internal/serve"
-	"vaultwright/internal/wordcodec"
+	"github.com/alexey-lapin/vaultwright/internal/blob"
+	"github.com/alexey-lapin/vaultwright/internal/prompt"
+	"github.com/alexey-lapin/vaultwright/internal/scheme"
+	"github.com/alexey-lapin/vaultwright/internal/serve"
+	"github.com/alexey-lapin/vaultwright/internal/wordcodec"
 )
 
 const passwordAttempts = 3

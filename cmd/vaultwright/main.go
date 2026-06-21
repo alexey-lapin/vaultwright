@@ -11,10 +11,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"vaultwright/internal/blob"
-	"vaultwright/internal/builtin"
-	"vaultwright/internal/prompt"
-	"vaultwright/internal/scheme"
+	"github.com/alexey-lapin/vaultwright/internal/blob"
+	"github.com/alexey-lapin/vaultwright/internal/builtin"
+	"github.com/alexey-lapin/vaultwright/internal/prompt"
+	"github.com/alexey-lapin/vaultwright/internal/scheme"
 )
 
 // version is set at release time via -ldflags "-X main.version=vX.Y.Z".

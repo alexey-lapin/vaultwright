@@ -1,4 +1,4 @@
-module vaultwright
+module github.com/alexey-lapin/vaultwright
 
 go 1.26.2
 

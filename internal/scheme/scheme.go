@@ -9,9 +9,9 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"vaultwright/internal/archive"
-	"vaultwright/internal/blob"
-	"vaultwright/internal/cryptocore"
+	"github.com/alexey-lapin/vaultwright/internal/archive"
+	"github.com/alexey-lapin/vaultwright/internal/blob"
+	"github.com/alexey-lapin/vaultwright/internal/cryptocore"
 )
 
 const pkLen = 32 // X25519 public/private key length

@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"os"
 
-	"vaultwright/internal/blob"
-	"vaultwright/internal/prompt"
-	"vaultwright/internal/scheme"
-	"vaultwright/internal/wordcodec"
+	"github.com/alexey-lapin/vaultwright/internal/blob"
+	"github.com/alexey-lapin/vaultwright/internal/prompt"
+	"github.com/alexey-lapin/vaultwright/internal/scheme"
+	"github.com/alexey-lapin/vaultwright/internal/wordcodec"
 )
 
 func main() {
