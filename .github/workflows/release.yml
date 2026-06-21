@@ -32,21 +32,22 @@ jobs:
         run: VERSION="${GITHUB_REF_NAME}" ./scripts/build-release.sh
 
       # 3. Publish to the release using the built-in gh CLI (no third-party action).
-      #    Stubs live under stubs/<role>/..., so flatten to "<role>-<os>_<arch>.stub"
-      #    asset names (via gh's "path#name" syntax) to avoid collisions; this is the
-      #    name the downloader fetches from releases/download/<tag>/.
+      #    Stage flat-named copies first: stubs live under stubs/<role>/..., whose
+      #    basenames collide, so rename to "<role>-<os>_<arch>.stub" — the unique
+      #    asset name the downloader fetches from releases/download/<tag>/.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          assets=(dist/SHA256SUMS)
-          for f in dist/vaultwright-*; do assets+=("$f"); done
+          mkdir -p dist/assets
+          cp dist/SHA256SUMS dist/assets/
+          cp dist/vaultwright-* dist/assets/ 2>/dev/null || true
           while IFS= read -r f; do
-            rel=${f#dist/stubs/}         # e.g. vault/darwin_arm64.stub
-            assets+=("${f}#${rel/\//-}") # → vault-darwin_arm64.stub
+            rel=${f#dist/stubs/}              # e.g. vault/darwin_arm64.stub
+            cp "$f" "dist/assets/${rel/\//-}" # → vault-darwin_arm64.stub
           done < <(find dist/stubs -type f -name '*.stub' | sort)
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            "${assets[@]}"
+            dist/assets/*
