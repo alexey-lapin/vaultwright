@@ -10,9 +10,8 @@ challenge–response with a separate responder binary you keep on a trusted mach
 
 After unlock the files are served from memory on a random loopback port.
 
-**Status:** works end-to-end. Multi-target builds with on-demand, hash-verified stub
-download are implemented (`docs/plans/2026-06-14-vaultwright.md` §13); the first tagged
-release is still pending.
+**Status:** released. Multi-target builds with on-demand, hash-verified stub download
+work end-to-end.
 
 ## Install
 

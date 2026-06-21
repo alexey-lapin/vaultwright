@@ -26,8 +26,6 @@ resisting replay.
 can still see a high-entropy blob); a compromised machine that holds `warden`;
 attacks requiring the operator to run `warden` against an attacker's challenge.
 
-The full design and rationale live in `docs/plans/2026-06-14-vaultwright.md`.
-
 ## Distribution integrity
 
 Release stubs downloaded on demand are verified against a SHA-256 manifest embedded
