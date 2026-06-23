@@ -15,12 +15,25 @@ work end-to-end.
 
 ## Install
 
+**Prebuilt binary (recommended)** — from the [latest release](https://github.com/alexey-lapin/vaultwright/releases/latest);
+these can seal for the host and download + verify other targets on demand:
+
 ```sh
-# From source (host platform):
-make                    # → bin/vaultwright
-# Or, once a version is tagged:
-go install github.com/alexey-lapin/vaultwright/cmd/vaultwright@latest
+curl -L -o vaultwright \
+  https://github.com/alexey-lapin/vaultwright/releases/latest/download/vaultwright-darwin-arm64
+chmod +x vaultwright   # pick the asset for your os/arch
 ```
+
+**From source** — builds the host stubs locally (seals host targets; multi-target needs a
+release binary, whose embedded SHA-256 manifest authorizes downloads):
+
+```sh
+git clone https://github.com/alexey-lapin/vaultwright && cd vaultwright && make   # → bin/vaultwright
+```
+
+> `go install` is **not** supported: the working stubs and the trust-root manifest are
+> assembled by CI into the release binaries and are not in the committed source, so a
+> `go install` build can't seal.
 
 See [SECURITY.md](SECURITY.md) for the threat model and how to report issues.
 

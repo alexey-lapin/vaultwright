@@ -84,6 +84,12 @@ release and verified against the embedded `SHA256SUMS` (the trust root). Dev bui
 (`Version == dev`, empty manifest) refuse to download. Repo overridable via
 `$VAULTWRIGHT_RELEASE_REPO`; cache at `<user cache>/vaultwright/stubs/<ver>/...`.
 
+**`go install` is NOT supported** and must not be advertised: committed sources have only
+placeholder stubs + an empty manifest, so a `go install` build can't seal (it'd hit the
+placeholder error) and can't download (dev build / no trust-root manifest). Distribute the
+CLI via the release binaries (built by `build-release.sh` in CI); local dev uses `make`.
+The CLI `main` is at `cmd/vaultwright` (not the module root).
+
 ## Testing the unlock ceremony
 
 Interactive word entry needs a TTY. For headless end-to-end, drive the sealed `vault`
