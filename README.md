@@ -15,14 +15,31 @@ work end-to-end.
 
 ## Install
 
-**Prebuilt binary (recommended)** — from the [latest release](https://github.com/alexey-lapin/vaultwright/releases/latest);
-these can seal for the host and download + verify other targets on demand:
+**Homebrew (recommended)** — this repo doubles as its own tap. `brew` downloads without
+the macOS quarantine attribute, so the CLI runs without a Gatekeeper prompt:
 
 ```sh
-curl -L -o vaultwright \
-  https://github.com/alexey-lapin/vaultwright/releases/latest/download/vaultwright-darwin-arm64
-chmod +x vaultwright   # pick the asset for your os/arch
+brew tap alexey-lapin/vaultwright https://github.com/alexey-lapin/vaultwright
+brew install vaultwright
 ```
+
+**Prebuilt binary** — from the [latest release](https://github.com/alexey-lapin/vaultwright/releases/latest);
+these can seal for the host and download + verify other targets on demand. Pick the asset
+for your os/arch and verify it against the release `checksums.txt`:
+
+```sh
+asset=vaultwright-darwin-arm64   # pick your os/arch
+base=https://github.com/alexey-lapin/vaultwright/releases/latest/download
+curl -L -O "$base/$asset"
+curl -L -O "$base/checksums.txt"
+grep " $asset\$" checksums.txt | shasum -a 256 -c -   # → "$asset: OK"
+chmod +x "$asset" && mv "$asset" vaultwright
+```
+
+> On macOS, a binary downloaded via a **browser** (not `curl`) is quarantined; clear it
+> with `xattr -d com.apple.quarantine vaultwright` before running. The same applies to the
+> `*.vault` / `*.warden` binaries you hand to others if they save them from a browser,
+> email, or AirDrop.
 
 **From source** — builds the host stubs locally (seals host targets; multi-target needs a
 release binary, whose embedded SHA-256 manifest authorizes downloads):
@@ -48,19 +65,21 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report issues.
 ## Build
 
 ```sh
-make            # builds the darwin/arm64 stubs, then bin/vaultwright
+make            # builds the host (GOOS/GOARCH) stubs, then bin/vaultwright
 ```
 
-`vaultwright` embeds the two stubs and the wordlist; the stubs are compiled first
-because `vaultwright` bakes them in. (Target is darwin/arm64 for now.)
+`vaultwright` embeds the host's vault/warden stubs plus the wordlist; the stubs are
+compiled first because `vaultwright` bakes them in. A locally built CLI seals for the host
+platform; other targets are downloaded on demand — only a release binary's embedded
+SHA-256 manifest authorizes those downloads, so a `make` build refuses them.
 
-**Stub files & git.** `internal/builtin/{vault,warden}.stub` are committed as
-small text *placeholders* so `go build ./...` works on a fresh clone; `make`
-overwrites them with real (multi-MB) compiled binaries. To keep those local
-rebuilds from showing up as changes, mark them skip-worktree after cloning:
+**Stub files & git.** The stubs live at `internal/builtin/stubs/<role>/<os>_<arch>.stub`
+and are committed as small text *placeholders* so `go build ./...` works on a fresh clone;
+`make` overwrites the host ones with real (multi-MB) compiled binaries. To keep those
+local rebuilds from showing up as changes, mark them skip-worktree after cloning:
 
 ```sh
-git update-index --skip-worktree internal/builtin/vault.stub internal/builtin/warden.stub
+git update-index --skip-worktree internal/builtin/stubs/*/*.stub
 ```
 
 Never commit the built stubs. `make clean` restores the placeholders.
