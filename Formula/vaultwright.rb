@@ -9,28 +9,28 @@
 class Vaultwright < Formula
   desc "Build an encrypted, embedded static-file server from a single binary"
   homepage "https://github.com/alexey-lapin/vaultwright"
-  version "0.0.1"
+  version "0.0.2"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.1/vaultwright-darwin-arm64"
-      sha256 "395e01c8acf5f085cfbb33cb9d447ea725d33f65f019c07b71175f09907df71f"
+      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.2/vaultwright-darwin-arm64"
+      sha256 "178eeb46557e5ba32f9e104e8867eca339e47e2ad3e8b93fe3c29af0cb7ef2c6"
     end
     on_intel do
-      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.1/vaultwright-darwin-amd64"
-      sha256 "abb10946807ce1dcc474126868a19471b899b1f6848a3061f8b3716ad6cf371e"
+      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.2/vaultwright-darwin-amd64"
+      sha256 "fc4231cabe29c9dfccb04c646720320cd85c8b7b6c33103719a3ed25c12c8d39"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.1/vaultwright-linux-arm64"
-      sha256 "4b59b7ed2a256ba121007b92c628868787faa88f8780658c0c01397c3b90774f"
+      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.2/vaultwright-linux-arm64"
+      sha256 "57d248b71c7e429bcda25ff5e083fa1b22cba53dbff886a18bfd519dfc845964"
     end
     on_intel do
-      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.1/vaultwright-linux-amd64"
-      sha256 "0859ea8fe2cba5bd7a37da00a8c0c7b2add993aa512b8aef84c232b77a1ce67a"
+      url "https://github.com/alexey-lapin/vaultwright/releases/download/v0.0.2/vaultwright-linux-amd64"
+      sha256 "c31e0ed46327adcf3213eb4e5b043a88ffe223cbed1218073649a280198c791b"
     end
   end
 
