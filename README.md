@@ -151,6 +151,61 @@ pre-fetch them with `vaultwright fetch-stubs --all` (or `fetch-stubs os/arch …
 
 ## How it works
 
+**Seal** mints a fresh keypair per build and splits trust into two factors — one you
+know (the password), one the warden holds (the private key) — before either binary exists:
+
+```mermaid
+flowchart TD
+    pw([password]):::inp --> P
+    pw --> seal
+    dir([./site folder]):::inp --> tar["tar(./site)"]
+    dir --> seal
+
+    seal["<b>vaultwright seal</b><br/>mint fresh X25519 keypair (sk, pk)<br/>stateless · forgets the keypair after"]:::proc
+    seal --> S
+    seal -. private key sk .-> warden
+
+    P["P = Argon2id(password, salt)<br/><i>factor 1 — you</i>"]:::key
+    S["S = HKDF(sk, 'asset-share')<br/><i>factor 2 — 16 bytes</i>"]:::key
+    P --> Ka["K_a = HKDF(S ‖ P)"]:::key
+    S --> Ka
+    Ka --> enc["XChaCha20-Poly1305(K_a, tar)"]
+    tar --> enc
+
+    enc --> vault[["<b>demo.vault</b> · run / distribute<br/>salt · enc assets · pw-enc{ pk, wordlist }"]]:::out
+    warden[["<b>demo.warden</b> · trusted machine<br/>private key sk → recovers S"]]:::out
+
+    classDef inp fill:#eef,stroke:#88a,color:#222;
+    classDef key fill:#fff7e6,stroke:#d9a300,color:#222;
+    classDef proc fill:#f5f5f5,stroke:#888,color:#222;
+    classDef out fill:#e8f7ec,stroke:#3a8,color:#222;
+```
+
+**Unlock** runs a fresh ephemeral handshake every time, so a captured response can't be
+replayed. Either factor alone dead-ends — a wrong password at the metadata step, a wrong
+response at asset decryption:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant V as demo.vault — server
+    participant W as demo.warden — 2nd factor
+
+    You->>V: password
+    Note over V: P = Argon2id(pw, salt)<br/>open pw-enc → pk, wordlist<br/>✗ wrong password stops here
+    Note over V: make ephemeral keypair e
+    V-->>You: 24-word challenge (e.pub)
+    You->>W: read the 24 words aloud
+    Note over W: shared = X25519(sk, e.pub)<br/>resp = S ⊕ HKDF(shared)
+    W-->>You: 12-word response
+    You->>V: type the 12 words
+    Note over V: recover S → K_a = HKDF(S ‖ P)<br/>decrypt assets in memory<br/>✗ wrong response stops here
+    V-->>You: http://127.0.0.1:PORT/&lt;key&gt;/ (served from RAM)
+```
+
+For reference, the key hierarchy in one block:
+
 ```
 P    = Argon2id(password, salt)              factor 1 (you)
 sk,pk                                        fresh X25519 keypair per seal
@@ -158,12 +213,6 @@ S    = HKDF(sk, "…asset-share…")             16 bytes; factor 2 lives in war
 K_a  = HKDF(S || P)                          asset key
 assets = XChaCha20-Poly1305(K_a, files)
 ```
-
-Unlock: `vault` derives `P` from the password, then runs a fresh ephemeral
-handshake — challenge = its ephemeral public key (24 words), response =
-`S ⊕ HKDF(shared)` from the warden (12 words). It recovers `S`, derives `K_a`,
-and decrypts. A wrong password fails at the metadata step; a wrong response fails
-at asset decryption.
 
 On disk the vault contains only a plaintext random salt followed by opaque
 ciphertext (assets, and a password-encrypted blob holding the public key and the
