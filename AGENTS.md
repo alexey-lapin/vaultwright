@@ -72,10 +72,15 @@ distributed binary (defeats unscannability; see plan §5). Don't add that import
 
 ## Releases
 
-Trigger: push a `v*` tag, or **Actions → Release → Run workflow** (workflow_dispatch with
-a `tag` input), or `gh workflow run release.yml -f tag=vX.Y.Z`.
+Trigger: push a `v*` tag, or **Actions → Release → Run workflow** (workflow_dispatch), or
+`gh workflow run release.yml`. On manual dispatch you don't compute the number — pick a
+`bump` level applied to the latest release (`-f bump=minor`, default `patch`), or force an
+exact `-f version=vX.Y.Z` (overrides `bump`). The "Resolve version" step derives `$VERSION`
+(tag push → the tag; else the supplied/computed version) and refuses to re-release an
+existing tag. A tag push still sets `$VERSION` straight from the tag.
 
 The workflow (`.github/workflows/release.yml`):
+0. Resolve version → `$VERSION` (see above), used by every later step.
 1. `build-stubs.sh` → `dist/stubs/<role>/<os>_<arch>.stub` + `dist/SHA256SUMS`.
 2. `build-release.sh` → per-host `dist/vaultwright-<os>-<arch>` embedding that host's stubs
    + manifest + `-X internal/builtin.Version`.
