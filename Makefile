@@ -15,9 +15,14 @@ HOST     := $(GOOS)_$(GOARCH)
 # NOTE: no backticks — they would be shell command substitution in the recipe.
 PLACEHOLDER := placeholder - run make to build this stub
 
-.PHONY: all stubs vaultwright stubs-matrix clean test vet fmt-check
+.PHONY: all stubs vaultwright stubs-matrix clean test vet fmt-check install-hooks
 
 all: vaultwright
+
+# Point git at the version-controlled hooks (blocks committing built stubs).
+install-hooks:
+	git config core.hooksPath scripts/hooks
+	@echo "git hooks installed (core.hooksPath=scripts/hooks)"
 
 stubs:
 	rm -f $(STUBDIR)/vault/$(HOST).stub $(STUBDIR)/warden/$(HOST).stub

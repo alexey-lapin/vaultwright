@@ -1,0 +1,23 @@
+# Categorizes the auto-generated release notes (gh release create --generate-notes).
+# Entries are grouped by the labels on each merged PR; PRs land in the first category
+# whose label matches. Keep PRs labeled so releases read well.
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+  categories:
+    - title: 🚀 Features
+      labels:
+        - enhancement
+    - title: 🐛 Fixes
+      labels:
+        - bug
+    - title: 📚 Documentation
+      labels:
+        - documentation
+    - title: ⬆️ Dependencies
+      labels:
+        - dependencies
+    - title: 🔧 Other Changes
+      labels:
+        - "*"

@@ -61,6 +61,10 @@ placeholders**. `make` overwrites them with real (multi-MB) binaries for the hos
   `make` and commit a 5.6 MB stub; history had to be purged with filter-branch + force
   push. Keep `PLACEHOLDER` backtick-free.
 - `.DS_Store` is gitignored; don't let macOS sweep it into `internal/builtin/stubs/`.
+- **Safety net:** `make install-hooks` points `core.hooksPath` at `scripts/hooks`, whose
+  `pre-commit` rejects any staged `*.stub` larger than the placeholder (multi-MB =
+  built binary). Run it once per clone (git hooks aren't cloned). Bypass with
+  `git commit --no-verify` only if you really mean it.
 
 The wordlist and stubs live in `internal/builtin`, which is imported **only** by
 `cmd/vaultwright` — never by `cmd/vault`/`cmd/warden`, or the wordlist would leak into a
@@ -97,6 +101,31 @@ via a fifo (feed password, scrape the 24-word challenge from its output, run `wa
 get the 12-word response, feed it back), then `curl` the served file. The piped path uses
 the line-based reader in `internal/prompt` (not raw mode). `internal/scheme` also has a
 full programmatic ceremony test (`TestSealUnlockEndToEnd`).
+
+## Git flow
+
+`main` is protected — **no direct pushes**. All changes land via pull request:
+
+1. Branch from `main` with a `feature/` prefix: `git switch -c feature/<short-slug>`.
+2. Commit, push (`git push -u origin HEAD`), open a PR (`gh pr create`).
+3. CI (`build-test` on ubuntu + macOS) runs on every PR. It's **advisory** — the ruleset
+   requires a PR but not passing checks or approvals (solo repo), so don't merge red.
+4. **Squash-merge** — the PR *title* becomes the single commit subject and the
+   release-note line, so write it imperative + scoped (e.g. `serve: fix idle race`).
+   The branch is auto-deleted on merge. (Squash is the only merge method the repo allows.)
+5. **Label the PR** (`enhancement` / `bug` / `documentation` / `dependencies`) so the
+   auto-generated release notes (`.github/release.yml`) file it under the right heading;
+   `ignore-for-release` keeps a PR out of the notes entirely.
+
+Releases run `gh release create --generate-notes`, which builds "What's Changed" from
+the merged PRs since the last tag — categorized per `.github/release.yml`. Good PR
+titles + labels = good release descriptions.
+
+`main` is enforced by a branch ruleset (`gh api /repos/OWNER/REPO/rulesets`). On a
+personal repo the Actions `GITHUB_TOKEN` can't be a bypass actor, so the release
+workflow's formula update doesn't push to `main` — it opens a `release/formula-<ver>`
+PR and squash-merges it (labeled `ignore-for-release`). The repo-admin role is the one
+bypass actor, so a maintainer can still push to `main` directly in a pinch.
 
 ## Conventions
 
