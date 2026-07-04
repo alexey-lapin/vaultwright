@@ -2,16 +2,24 @@ name: Release
 
 # Builds the vault/warden stub matrix + SHA-256 manifest and the per-host vaultwright
 # CLI (embedding host stubs + manifest + version), then publishes them to a GitHub
-# Release. Triggered by pushing a v* tag, or manually via workflow_dispatch with a tag.
+# Release. Triggered by pushing a v* tag, or manually via workflow_dispatch — pick a
+# bump level (patch/minor/major, applied to the latest release) or supply an exact
+# version. The version is resolved in the "Resolve version" step below.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Release tag to build and publish (e.g. v0.0.2)"
-        required: true
+      bump:
+        description: "Bump level, applied to the latest release (ignored if 'version' is set)"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: "Exact version to release, e.g. v0.0.3 (overrides bump)"
+        required: false
+        default: ""
 
 permissions:
   contents: write # create the GitHub release + push the formula branch
@@ -20,15 +28,58 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # On a tag push this is the tag; on manual dispatch it's the provided input.
-    env:
-      VERSION: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+
+      # 0. Resolve the release version (vMAJOR.MINOR.PATCH) and export it as $VERSION
+      #    for every later step:
+      #      - tag push          → the pushed tag (github.ref_name)
+      #      - dispatch + version → the exact version supplied (validated)
+      #      - dispatch + bump    → the latest release incremented by that level
+      #    Refuses to re-release an existing tag on manual dispatch.
+      - name: Resolve version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "push" ]; then
+            version="$REF_NAME"
+          elif [ -n "$IN_VERSION" ]; then
+            version="$IN_VERSION"
+          else
+            latest=$(gh release view --json tagName -q .tagName 2>/dev/null || echo v0.0.0)
+            v=${latest#v}
+            ma=${v%%.*}; v=${v#*.}
+            mi=${v%%.*}; pa=${v#*.}
+            case "$IN_BUMP" in
+              major) ma=$((ma + 1)); mi=0; pa=0 ;;
+              minor) mi=$((mi + 1)); pa=0 ;;
+              patch) pa=$((pa + 1)) ;;
+              *) echo "unknown bump: $IN_BUMP" >&2; exit 1 ;;
+            esac
+            version="v${ma}.${mi}.${pa}"
+          fi
+          # Normalize to a leading v and validate vX.Y.Z.
+          case "$version" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            [0-9]*.[0-9]*.[0-9]*) version="v$version" ;;
+            *) echo "invalid version '$version' (want vX.Y.Z)" >&2; exit 1 ;;
+          esac
+          # A tag push can't collide (the tag defines it); a manual run must not clobber.
+          if [ "$EVENT" != "push" ] && gh release view "$version" >/dev/null 2>&1; then
+            echo "release $version already exists — pick a different bump/version" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "Resolved release version: $version"
 
       # 1. Cross-compile the stub matrix and emit dist/SHA256SUMS.
       - name: Build stub matrix + manifest
@@ -38,7 +89,7 @@ jobs:
       # 2. Build the vaultwright CLI per host platform, embedding that host's stubs +
       #    the manifest + the version (see scripts/build-release.sh).
       - name: Build vaultwright CLI
-        run: ./scripts/build-release.sh # reads $VERSION from the job env
+        run: ./scripts/build-release.sh # reads $VERSION from the Resolve version step
 
       # 3. Publish to the release using the built-in gh CLI (no third-party action).
       #    Stage flat-named copies first: stubs live under stubs/<role>/..., whose
