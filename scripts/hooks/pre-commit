@@ -1,0 +1,44 @@
+#!/bin/sh
+# Block accidental commits of real (built) stub binaries.
+#
+# internal/builtin/stubs/<role>/<os>_<arch>.stub are committed as ~42-byte text
+# placeholders; `make` overwrites them with multi-MB host binaries (hidden via
+# git update-index --skip-worktree). Committing a real stub leaks a large binary
+# into history. See AGENTS.md, "Stub files — the #1 footgun".
+#
+# Installed via `make install-hooks` (sets core.hooksPath to scripts/hooks).
+set -eu
+
+MAX=4096 # placeholders are ~42 bytes; real stubs are multi-MB.
+fail=0
+
+# Staged (Added/Copied/Modified) files under the stub tree.
+staged=$(git diff --cached --name-only --diff-filter=ACM -- internal/builtin/stubs)
+
+for f in $staged; do
+	case "$f" in
+	*.stub) ;;
+	*) continue ;;
+	esac
+	size=$(git cat-file -s ":$f" 2>/dev/null || echo 0)
+	if [ "$size" -gt "$MAX" ]; then
+		echo "pre-commit: refusing to commit built stub: $f ($size bytes)" >&2
+		fail=1
+	fi
+done
+
+if [ "$fail" -ne 0 ]; then
+	cat >&2 <<'EOF'
+
+The staged stub(s) above are real compiled binaries, not the ~42-byte text
+placeholders. Committing them leaks multi-MB binaries into history.
+
+To reset host stubs to placeholders and re-hide local rebuilds:
+  make clean
+  git update-index --skip-worktree internal/builtin/stubs/*/*.stub
+
+To bypass intentionally (you almost certainly should not):
+  git commit --no-verify
+EOF
+	exit 1
+fi
