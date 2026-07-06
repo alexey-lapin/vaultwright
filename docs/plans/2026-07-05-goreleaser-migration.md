@@ -36,18 +36,23 @@ Two dead ends came first:
    that one directory, so builds had to be **serialized** (`--parallelism 1`) with pre/post
    staging+restore hooks.
 
-The shipped approach moves the per-host selection to **compile time via Go build tags**.
-`internal/builtin/stub_<os>_<arch>.go` (one per target) carries `//go:build <os> && <arch>`
-and `//go:embed`s that platform's stubs into `vaultStub`/`wardenStub`; `EmbeddedStub` returns
-them only when the requested target is `runtime.GOOS/GOARCH`. The Go toolchain therefore
+The shipped approach moves the per-host selection to **compile time via Go build tags**,
+gated by the **`embed_stubs`** tag. `internal/builtin/stub_<os>_<arch>.go` (one per target)
+carries `//go:build embed_stubs && <os> && <arch>` and `//go:embed`s that platform's stubs
+into `vaultStub`/`wardenStub`; `EmbeddedStub` returns them only when the requested target is
+`runtime.GOOS/GOARCH`. A tagged build (`make`, GoReleaser's `tags: [embed_stubs]`) therefore
 embeds only the host's stubs for each target — **no on-disk mutation during the build**, so
 GoReleaser builds all targets **in parallel** with a vanilla `builds:` block (no hooks, no
 `--parallelism 1`). The `before` hooks stage the real stubs into `internal/builtin/` once,
 up front. `scripts/build-release.sh` is deleted (GoReleaser compiles + bakes the version).
 
-Cost of build tags: `//go:embed` is compile-time, so **every** target's stub file must
-exist — all 12 placeholders are committed (vs. the host's 2 before), and a build-tagged
-`stub_other.go` with empty stubs keeps `go build` working on platforms outside the matrix.
+The `embed_stubs` gate is what lets the **stubs directory be git-ignored** (no committed
+files at all): a plain `go build`/`go test` (no tag) compiles `stub_fallback.go` (empty
+stubs) and needs no stub files present — fresh clones and CI build with nothing to set up.
+The same `stub_fallback.go` also covers `embed_stubs` builds for platforms outside the
+matrix (its tag is `!embed_stubs || !(matrix-platform)`). This
+retires the old placeholder-stub apparatus wholesale: **0 committed stubs (was 12/2),
+no `skip-worktree`, no `pre-commit` stub guard, no `make install-hooks`.**
 
 Rejected alternatives:
 - **Buy GoReleaser Pro** for `prebuilt` (the originally approved shape) — a paid
@@ -182,8 +187,8 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    # No custom name_template → GoReleaser's idiomatic default,
-    # e.g. vaultwright_0.0.4_darwin_arm64.tar.gz (version in the name).
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}   # vaultwright_0.0.4_darwin_arm64.tar.gz
 
 checksum:
   name_template: checksums.txt                 # CLI-archive checksums; NOT the stub trust root
@@ -224,13 +229,15 @@ Notes:
 
 ### `internal/builtin` changes
 
-- `stub_<os>_<arch>.go` (×6) — build-tagged `//go:embed` of that platform's stubs into
-  `vaultStub`/`wardenStub`. `stub_other.go` — negated build tag, empty stubs, for platforms
-  outside the matrix.
-- `builtin.go` — drops the `embed.FS` directory embed; `EmbeddedStub` returns the host stub
-  only when `goos/goarch == runtime.GOOS/GOARCH`.
-- All **12** stub placeholders are committed (every target's file must exist for the
-  compile-time embed), vs. the host's 2 before. Only the host pair is `skip-worktree`.
+- `stub_<os>_<arch>.go` (×6) — `//go:build embed_stubs && <os> && <arch>`, `//go:embed`s
+  that platform's stubs into `vaultStub`/`wardenStub`. `stub_fallback.go`
+  (`!embed_stubs || !(matrix-platform)`) provides empty stubs so untagged and off-matrix
+  builds compile with no stub files.
+- `builtin.go` — drops the `embed.FS` directory embed and `IsPlaceholder`; `EmbeddedStub`
+  returns the host stub only when `goos/goarch == runtime.GOOS/GOARCH` and it's non-empty.
+- `internal/stubs/stubs.go` — drops the now-dead placeholder check.
+- **Zero committed stub files** — `internal/builtin/stubs/` is git-ignored, built on demand.
+  No `skip-worktree`, no `pre-commit` guard.
 
 ### Scripts
 
@@ -273,21 +280,26 @@ Deleted:
 
 Also deleted:
 - `scripts/build-release.sh` — GoReleaser compiles the CLIs natively now.
+- `scripts/hooks/pre-commit` + the `make install-hooks` target — obsolete once stubs are
+  git-ignored (nothing to guard against committing).
+- All 12 committed placeholder stubs (`internal/builtin/stubs/` is now git-ignored).
 
-Changed `internal/builtin` (build-tag refactor):
-- `builtin.go` — drop `embed.FS`; host-only `EmbeddedStub`.
-- Added `stub_<os>_<arch>.go` (×6) + `stub_other.go`; committed all 12 stub placeholders
-  (was 2). `internal/stubs` unchanged (same `EmbeddedStub` signature).
+Changed `internal/builtin` (embed_stubs build-tag refactor):
+- `builtin.go` — drop `embed.FS` + `IsPlaceholder`; host-only, non-empty `EmbeddedStub`.
+- Added `stub_<os>_<arch>.go` (×6, `embed_stubs`-gated) + `stub_fallback.go` (empty stubs).
+- `internal/stubs/stubs.go` — drop the now-dead placeholder check (same `EmbeddedStub` API).
 
 Kept, lightly touched:
 - `scripts/build-stubs.sh` — add `windows/arm64`; default `OUT` `dist` → `build`.
+- `scripts/stage-embed.sh` — `mkdir -p` the now-ignored stubs dir before copying.
 - `.github/release.yml` — unchanged; consumed by `changelog: use: github-native`.
 - `.github/workflows/ci.yml` — bump action versions.
-- `Makefile` / `.gitignore` — `clean`/ignore the new `build/` intermediates dir.
-- `scripts/hooks` — untouched.
+- `Makefile` — build CLI with `-tags embed_stubs`; simpler `clean`; drop `install-hooks`.
+- `.gitignore` — ignore `build/` and `internal/builtin/stubs/`.
 
 Added:
 - `.goreleaser.yaml`, `scripts/stage-embed.sh`, `scripts/stage-release-assets.sh`.
+- `internal/builtin/stub_<os>_<arch>.go` (×6), `stub_fallback.go`.
 - `release.yml` rewritten as reusable (push:tags + workflow_call).
 - `release-dispatch.yml` (manual bump/version → push tag → call release.yml).
 - Secret `TAP_GITHUB_TOKEN`; formula lives in `homebrew-tap`.
@@ -311,9 +323,11 @@ Docs updated:
   staged for `extra_files`; a correct Homebrew formula; the host archive's binary reports
   `vaultwright v0.0.3`, an `--offline` **host** seal succeeds, and an `--offline` **non-host**
   seal fails with `not embedded … and offline` (proves each binary embeds only its host
-  stub). Cross-compiles for all 6 targets. `goreleaser check` reports config valid (non-zero
-  only on the `brews` deprecation). Restore the tree after a local run with
-  `git checkout -- internal/builtin/stubs internal/builtin/SHA256SUMS`.
+  stub). Cross-compiles for all 6 targets. Also verified: a **default** `go build`/`go test`
+  (no `embed_stubs` tag) compiles with **zero stub files present**, and `make` builds a
+  tagged host CLI that seals offline. `goreleaser check` reports config valid (non-zero only
+  on the `brews` deprecation). A local snapshot leaves only the git-ignored `stubs/` dir plus
+  a modified `internal/builtin/SHA256SUMS` (restore with `git checkout --`).
 - **First real release**: cut a low patch via `release-dispatch.yml` (`bump=patch`) and
   verify categorized notes match `.github/release.yml`, the formula lands in `homebrew-tap`,
   `brew tap alexey-lapin/tap && brew install vaultwright` works, and an end-to-end `seal`

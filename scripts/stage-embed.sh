@@ -15,6 +15,7 @@ test -f "$OUT/SHA256SUMS" || { echo "missing $OUT/SHA256SUMS — run scripts/bui
 
 cp "$OUT/SHA256SUMS" internal/builtin/SHA256SUMS
 for role in vault warden; do
+  mkdir -p "internal/builtin/stubs/$role"   # stubs/ is git-ignored, may not exist yet
   for f in "$OUT/stubs/$role/"*.stub; do
     cp "$f" "internal/builtin/stubs/$role/$(basename "$f")"
   done

@@ -27,6 +27,7 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
+    tags: [embed_stubs] # embed the host stubs staged by stage-embed.sh
     ldflags:
       - -s -w -X github.com/alexey-lapin/vaultwright/internal/builtin.Version={{ .Tag }}
 
@@ -37,8 +38,9 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    # No custom name_template → GoReleaser's idiomatic default (version in the name),
-    # e.g. vaultwright_0.0.4_darwin_arm64.tar.gz.
+    # Archive base name (extension added per format), e.g. vaultwright_0.0.4_darwin_arm64.tar.gz.
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
 checksum:
   name_template: checksums.txt # CLI-archive checksums; NOT the stub trust root (SHA256SUMS)

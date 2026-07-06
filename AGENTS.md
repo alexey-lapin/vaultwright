@@ -27,7 +27,7 @@ internal/blob         append-payload-to-executable container + framing
 internal/archive      tar bundle/extract of the asset dir (in memory)
 internal/serve        in-memory loopback HTTP (random port, path-key, entry-point, fallback, idle)
 internal/prompt       no-echo password + interactive (raw-mode) word entry; line fallback
-internal/builtin      embeds english.txt + SHA256SUMS + Version; host stubs via build-tagged stub_<os>_<arch>.go
+internal/builtin      embeds english.txt + SHA256SUMS + Version; host stubs via -tags embed_stubs (stub_<os>_<arch>.go); stubs/ git-ignored
 internal/stubs        Resolve(role,os,arch): stub-dir → embedded → cache → verified download
 scripts/build-stubs.sh    cross-compile the stub matrix + deterministic build/SHA256SUMS
 scripts/stage-embed.sh    copy built stubs + manifest into internal/builtin/ (GoReleaser before-hook)
@@ -37,37 +37,35 @@ scripts/stage-release-assets.sh  flatten stub asset names + SHA256SUMS into buil
 ## Build / test / lint
 
 ```sh
-make                 # build host stubs into internal/builtin/stubs/, then bin/vaultwright
-make clean           # reset host stubs to placeholders, remove bin/ and dist/
-go test ./...        # all tests pass with placeholder stubs (tests never run sealed binaries)
+make                 # build host stubs into internal/builtin/stubs/, then bin/vaultwright (-tags embed_stubs)
+make clean           # remove bin/, dist/, build/, and the git-ignored internal/builtin/stubs/
+go test ./...        # passes with no stubs present (default build embeds none; see embed_stubs below)
 go vet ./...
 gofmt -l cmd internal   # must be empty
-make stubs-matrix    # cross-compile the full matrix + manifest into dist/ (release prep)
+make stubs-matrix    # cross-compile the full matrix + manifest into build/ (release prep)
 ```
 
 CI (`.github/workflows/ci.yml`) runs gofmt/vet/build/test on ubuntu + macOS.
 
-## ⚠️ Stub files — the #1 footgun
+## Stub files & the `embed_stubs` tag
 
-`internal/builtin/stubs/<role>/<os>_<arch>.stub` are **committed as ~42-byte text
-placeholders** for **every** target in the matrix (all must exist, because the
-build-tagged `stub_<os>_<arch>.go` files `//go:embed` them at compile time). `make`
-overwrites only the **host** pair with real (multi-MB) binaries; `git update-index
---skip-worktree` keeps those local rebuilds from showing as changes.
+The compiled stub binaries `internal/builtin/stubs/<role>/<os>_<arch>.stub` are
+**git-ignored** — never committed. They're built on demand: `make` compiles the host pair,
+the release build (`build-stubs.sh` + `stage-embed.sh`) compiles the whole matrix.
 
-- **NEVER commit a real stub binary.** Before committing anything touching them, verify:
-  `git cat-file -s HEAD:internal/builtin/stubs/vault/darwin_arm64.stub` (should be tiny).
-- To (re)set skip-worktree on the **host** pair (not all — only the host is rebuilt by
-  `make`): `git update-index --skip-worktree internal/builtin/stubs/{vault,warden}/$(go env GOOS)_$(go env GOARCH).stub`
-- **Makefile placeholder strings must contain NO backticks** — in a recipe they become
-  shell command substitution. A backtick in `PLACEHOLDER` once made `make clean` run
-  `make` and commit a 5.6 MB stub; history had to be purged with filter-branch + force
-  push. Keep `PLACEHOLDER` backtick-free.
-- `.DS_Store` is gitignored; don't let macOS sweep it into `internal/builtin/stubs/`.
-- **Safety net:** `make install-hooks` points `core.hooksPath` at `scripts/hooks`, whose
-  `pre-commit` rejects any staged `*.stub` larger than the placeholder (multi-MB =
-  built binary). Run it once per clone (git hooks aren't cloned). Bypass with
-  `git commit --no-verify` only if you really mean it.
+Embedding is gated by the **`embed_stubs`** build tag (files `stub_<os>_<arch>.go`, one per
+target, each `//go:embed`ing that platform's stubs):
+
+- **Plain `go build` / `go test` (no tag)** compiles `stub_fallback.go` (empty stubs), so it
+  needs **no stub files present** — a fresh clone builds with nothing to set up, and CI
+  needs no stubs. `EmbeddedStub` then reports "not embedded" and stubs resolve via download.
+- **`-tags embed_stubs`** (added by `make` and by GoReleaser) embeds the host's real stubs;
+  the host's stub files must exist first (hence `make stubs` before the CLI build).
+
+Because the stubs are git-ignored, there's no placeholder/skip-worktree/pre-commit dance
+anymore — you can't accidentally `git add` a multi-MB stub. (Earlier this was the repo's #1
+footgun; a committed 5.6 MB stub once forced a history purge. The tag design removes it.)
+Don't add committed stub files or a `//go:embed stubs` directory glob back.
 
 The wordlist and stubs live in `internal/builtin`, which is imported **only** by
 `cmd/vaultwright` — never by `cmd/vault`/`cmd/warden`, or the wordlist would leak into a
@@ -78,9 +76,10 @@ distributed binary (defeats unscannability; see plan §5). Don't add that import
 Releases run **GoReleaser** (`.goreleaser.yaml`; design:
 `docs/plans/2026-07-05-goreleaser-migration.md`). GoReleaser compiles the CLIs natively.
 Each must embed ONLY its host's stubs — that selection happens at **compile time** via the
-build-tagged `internal/builtin/stub_<os>_<arch>.go` files, so GoReleaser builds every target
-**in parallel** from an unmutated tree (no serial `--parallelism 1`, no per-target hooks).
-GoReleaser also owns archiving, checksums, the Release, and the Homebrew push.
+`embed_stubs`-tagged `internal/builtin/stub_<os>_<arch>.go` files (GoReleaser sets
+`tags: [embed_stubs]`), so it builds every target **in parallel** from an unmutated tree
+(no serial `--parallelism 1`, no per-target hooks). GoReleaser also owns archiving,
+checksums, the Release, and the Homebrew push.
 
 Two workflows:
 - **`release.yml`** — reusable release job. Triggers on a `v*` **tag push** *or*
@@ -95,15 +94,15 @@ Two workflows:
 
 Build pipeline (GoReleaser owns `dist/`; our scripts write intermediates to `build/`):
 1. `before.hooks`, in order: `build-stubs.sh` → `build/stubs/<role>/<os>_<arch>.stub` +
-   `build/SHA256SUMS`; `stage-embed.sh` copies those real stubs + manifest into
-   `internal/builtin/` (overwriting the committed placeholders) so the build tags embed
-   them; `stage-release-assets.sh` → flat `build/assets/<role>-<os>_<arch>.stub` +
-   `SHA256SUMS` (basenames collide across roles; `extra_files` uploads by basename and
-   can't rename).
-2. GoReleaser builds all targets in parallel, version baked via
-   `-ldflags -X internal/builtin.Version={{ .Tag }}`. The runner tree is left dirty (real
-   stubs staged in) — harmless on ephemeral CI; locally restore with
-   `git checkout -- internal/builtin/stubs internal/builtin/SHA256SUMS`.
+   `build/SHA256SUMS`; `stage-embed.sh` copies those real stubs + manifest into the
+   git-ignored `internal/builtin/stubs/` + `internal/builtin/SHA256SUMS` so the
+   `embed_stubs` build embeds them; `stage-release-assets.sh` → flat
+   `build/assets/<role>-<os>_<arch>.stub` + `SHA256SUMS` (basenames collide across roles;
+   `extra_files` uploads by basename and can't rename).
+2. GoReleaser builds all targets in parallel (`tags: [embed_stubs]`), version baked via
+   `-ldflags -X internal/builtin.Version={{ .Tag }}`. The only tree change is the ignored
+   `stubs/` dir (invisible to git) + a modified `internal/builtin/SHA256SUMS`; locally
+   restore the latter with `git checkout -- internal/builtin/SHA256SUMS`.
 
 GoReleaser then: archives the CLIs (`tar.gz`, `.zip` on Windows; version in the name) +
 `checksums.txt`; uploads the flat stub assets + `SHA256SUMS` via `release.extra_files`;
@@ -119,10 +118,10 @@ release and verified against the embedded `SHA256SUMS` (the trust root). Dev bui
 (`Version == dev`, empty manifest) refuse to download. Repo overridable via
 `$VAULTWRIGHT_RELEASE_REPO`; cache at `<user cache>/vaultwright/stubs/<ver>/...`.
 
-**`go install` is NOT supported** and must not be advertised: committed sources have only
-placeholder stubs + an empty manifest, so a `go install` build can't seal (it'd hit the
-placeholder error) and can't download (dev build / no trust-root manifest). Distribute the
-CLI via the release binaries (built by GoReleaser in CI); local dev uses `make`.
+**`go install` is NOT supported** and must not be advertised: it builds without
+`-tags embed_stubs` and with an empty manifest, so it embeds no stubs and can't seal (host
+stub absent) and can't download (dev build / no trust-root manifest). Distribute the CLI via
+the release binaries (built by GoReleaser in CI); local dev uses `make`.
 The CLI `main` is at `cmd/vaultwright` (not the module root).
 
 ## Testing the unlock ceremony

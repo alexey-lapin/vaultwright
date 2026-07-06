@@ -3,15 +3,14 @@
 // used to verify downloaded stubs. It is imported solely by vaultwright, so the wordlist
 // never ends up in a distributed vault/warden binary.
 //
-// The host stubs are embedded via per-platform, build-tagged files (stub_<os>_<arch>.go),
-// so a binary compiled for a given GOOS/GOARCH embeds only that platform's stubs — no
-// build-time mutation of the stubs directory is needed. Every target's stub file under
-// stubs/ is a placeholder in source control; `make` overwrites the host-platform ones
-// with real compiled binaries. Non-host stubs are fetched on demand (see internal/stubs).
+// The host stubs are embedded only under the "embed_stubs" build tag, via per-platform
+// files (stub_<os>_<arch>.go), so a tagged binary embeds solely its own GOOS/GOARCH stubs.
+// A plain `go build` (no tag) embeds nothing and needs no stub files present — stubs/ is
+// git-ignored and populated by `make` / the release build. Non-host (and untagged) targets
+// are fetched on demand (see internal/stubs).
 package builtin
 
 import (
-	"bytes"
 	_ "embed"
 	"runtime"
 )
@@ -32,13 +31,10 @@ func Manifest() []byte { return manifestBytes }
 // -ldflags "-X github.com/alexey-lapin/vaultwright/internal/builtin.Version=vX.Y.Z".
 var Version = "dev"
 
-// placeholderPrefix marks a committed stub that has not been compiled yet.
-var placeholderPrefix = []byte("placeholder")
-
 // EmbeddedStub returns the embedded stub bytes for role ("vault"/"warden") and the given
-// GOOS/GOARCH, and whether one is embedded. Only the host platform's stubs are embedded
-// (vaultStub/wardenStub come from the build-tagged stub_<os>_<arch>.go for this build), so
-// any non-host target reports false and is resolved via download.
+// GOOS/GOARCH, and whether one is embedded. Only the host platform's stubs are ever
+// embedded, and only in an "embed_stubs" build (vaultStub/wardenStub are empty otherwise),
+// so any non-host or untagged target reports false and is resolved via download.
 func EmbeddedStub(role, goos, goarch string) ([]byte, bool) {
 	if goos != runtime.GOOS || goarch != runtime.GOARCH {
 		return nil, false
@@ -50,9 +46,4 @@ func EmbeddedStub(role, goos, goarch string) ([]byte, bool) {
 		return wardenStub, len(wardenStub) > 0
 	}
 	return nil, false
-}
-
-// IsPlaceholder reports whether stub bytes are an uncompiled placeholder.
-func IsPlaceholder(b []byte) bool {
-	return bytes.HasPrefix(b, placeholderPrefix)
 }

@@ -1,6 +1,8 @@
 /bin/
 /dist/
 /build/
+# Host/release stub binaries are built on demand; embedded only under -tags embed_stubs.
+/internal/builtin/stubs/
 # Sealed outputs produced by `vaultwright seal`.
 *.vault
 *.warden

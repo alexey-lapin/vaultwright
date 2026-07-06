@@ -69,22 +69,17 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report issues.
 make            # builds the host (GOOS/GOARCH) stubs, then bin/vaultwright
 ```
 
-`vaultwright` embeds the host's vault/warden stubs plus the wordlist; the stubs are
-compiled first because `vaultwright` bakes them in. A locally built CLI seals for the host
-platform; other targets are downloaded on demand — only a release binary's embedded
-SHA-256 manifest authorizes those downloads, so a `make` build refuses them.
+`vaultwright` embeds the host's vault/warden stubs plus the wordlist; `make` compiles the
+stubs first, then builds the CLI with `-tags embed_stubs` so they're baked in. A locally
+built CLI seals for the host platform; other targets are downloaded on demand — only a
+release binary's embedded SHA-256 manifest authorizes those downloads, so a `make` build
+refuses them.
 
-**Stub files & git.** The stubs live at `internal/builtin/stubs/<role>/<os>_<arch>.stub`
-and are committed as small text *placeholders* so `go build ./...` works on a fresh clone;
-`make` overwrites the host ones with real (multi-MB) compiled binaries. To keep those
-local rebuilds from showing up as changes, mark the host pair skip-worktree after cloning:
-
-```sh
-git update-index --skip-worktree \
-  internal/builtin/stubs/{vault,warden}/"$(go env GOOS)_$(go env GOARCH)".stub
-```
-
-Never commit the built stubs. `make clean` restores the placeholders.
+**Stub files & git.** The compiled stubs live at
+`internal/builtin/stubs/<role>/<os>_<arch>.stub` and are **git-ignored** — `make` builds
+them there on demand. A plain `go build`/`go test` (no `embed_stubs` tag) embeds no stubs
+and needs none present, so a fresh clone builds with nothing to set up. `make clean`
+removes them.
 
 ## Use
 
