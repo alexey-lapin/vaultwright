@@ -72,11 +72,8 @@ func Resolve(role, goos, goarch string, opt Options) ([]byte, error) {
 		}
 	}
 
-	// 2. Embedded in this (trusted) vaultwright build.
+	// 2. Embedded in this (trusted) vaultwright build (host only, "embed_stubs" builds).
 	if b, ok := builtin.EmbeddedStub(role, goos, goarch); ok {
-		if builtin.IsPlaceholder(b) {
-			return nil, fmt.Errorf("stubs: %s/%s/%s is a placeholder — run `make` to build it", role, goos, goarch)
-		}
 		return b, nil
 	}
 

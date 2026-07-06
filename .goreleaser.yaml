@@ -1,0 +1,68 @@
+# GoReleaser config for vaultwright.
+#
+# Each per-host vaultwright CLI embeds ONLY its host's vault/warden stubs + the SHA-256
+# manifest (see internal/builtin). That selection happens at compile time via build tags
+# (internal/builtin/stub_<os>_<arch>.go), so GoReleaser builds every target in parallel
+# from an unmutated tree — the before-hooks just stage the freshly built real stubs into
+# internal/builtin/ once, up front.
+#
+# Local dry run (no tag):  goreleaser release --snapshot --clean
+#   then restore the tree:  git checkout -- internal/builtin/stubs internal/builtin/SHA256SUMS
+# Validate config:         goreleaser check
+version: 2
+
+before:
+  hooks:
+    # Cross-compile the vault/warden stub matrix + build/SHA256SUMS (trust root).
+    - ./scripts/build-stubs.sh
+    # Copy the real stubs + manifest into internal/builtin/ for the build tags to embed.
+    - ./scripts/stage-embed.sh
+    # Flatten stub asset names + copy SHA256SUMS into build/assets/ for release.extra_files.
+    - ./scripts/stage-release-assets.sh
+
+builds:
+  - id: vaultwright
+    main: ./cmd/vaultwright
+    binary: vaultwright
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    tags: [embed_stubs] # embed the host stubs staged by stage-embed.sh
+    ldflags:
+      - -s -w -X github.com/alexey-lapin/vaultwright/internal/builtin.Version={{ .Tag }}
+
+archives:
+  - id: vaultwright
+    ids: [vaultwright]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # Archive base name (extension added per format), e.g. vaultwright_0.0.4_darwin_arm64.tar.gz.
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt # CLI-archive checksums; NOT the stub trust root (SHA256SUMS)
+
+changelog:
+  use: github-native # GitHub's release-notes API → honors .github/release.yml
+
+release:
+  extra_files:
+    - glob: build/assets/*.stub # vault-darwin_arm64.stub, warden-windows_arm64.stub, …
+    - glob: build/assets/SHA256SUMS # stub trust root, downloaded + verified by the CLI
+
+brews:
+  - repository:
+      owner: alexey-lapin
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}" # fine-grained PAT, NOT the default token
+    homepage: "https://github.com/alexey-lapin/vaultwright"
+    description: "Build an encrypted, embedded static-file server from a single binary"
+    license: "Apache-2.0"
+    skip_upload: auto # skip the formula push for prereleases
+    install: |
+      bin.install "vaultwright"
+    test: |
+      assert_match "vaultwright", shell_output("#{bin}/vaultwright version")

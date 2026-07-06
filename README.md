@@ -15,25 +15,26 @@ work end-to-end.
 
 ## Install
 
-**Homebrew (recommended)** — this repo doubles as its own tap. `brew` downloads without
-the macOS quarantine attribute, so the CLI runs without a Gatekeeper prompt:
+**Homebrew (recommended)** — installs from the `alexey-lapin/homebrew-tap` tap. `brew`
+downloads without the macOS quarantine attribute, so the CLI runs without a Gatekeeper
+prompt:
 
 ```sh
-brew tap alexey-lapin/vaultwright https://github.com/alexey-lapin/vaultwright
+brew tap alexey-lapin/tap
 brew install vaultwright
 ```
 
-**Prebuilt binary** — from the [latest release](https://github.com/alexey-lapin/vaultwright/releases/latest);
-these can seal for the host and download + verify other targets on demand. Pick the asset
-for your os/arch and verify it against the release `checksums.txt`:
+**Prebuilt binary** — grab the archive for your os/arch from the
+[latest release](https://github.com/alexey-lapin/vaultwright/releases/latest) (assets are
+named `vaultwright_<version>_<os>_<arch>.tar.gz`, `.zip` on Windows). These seal for the
+host and download + verify other targets on demand. Extract and verify against the release
+`checksums.txt` — e.g. with the GitHub CLI, which resolves the latest release for you:
 
 ```sh
-asset=vaultwright-darwin-arm64   # pick your os/arch
-base=https://github.com/alexey-lapin/vaultwright/releases/latest/download
-curl -L -O "$base/$asset"
-curl -L -O "$base/checksums.txt"
-grep " $asset\$" checksums.txt | shasum -a 256 -c -   # → "$asset: OK"
-chmod +x "$asset" && mv "$asset" vaultwright
+gh release download -R alexey-lapin/vaultwright \
+  -p '*_darwin_arm64.tar.gz' -p checksums.txt   # pick your os/arch
+shasum -a 256 -c checksums.txt --ignore-missing  # → "…_darwin_arm64.tar.gz: OK"
+tar xzf vaultwright_*_darwin_arm64.tar.gz        # → ./vaultwright
 ```
 
 > On macOS, a binary downloaded via a **browser** (not `curl`) is quarantined; clear it
@@ -68,21 +69,17 @@ See [SECURITY.md](SECURITY.md) for the threat model and how to report issues.
 make            # builds the host (GOOS/GOARCH) stubs, then bin/vaultwright
 ```
 
-`vaultwright` embeds the host's vault/warden stubs plus the wordlist; the stubs are
-compiled first because `vaultwright` bakes them in. A locally built CLI seals for the host
-platform; other targets are downloaded on demand — only a release binary's embedded
-SHA-256 manifest authorizes those downloads, so a `make` build refuses them.
+`vaultwright` embeds the host's vault/warden stubs plus the wordlist; `make` compiles the
+stubs first, then builds the CLI with `-tags embed_stubs` so they're baked in. A locally
+built CLI seals for the host platform; other targets are downloaded on demand — only a
+release binary's embedded SHA-256 manifest authorizes those downloads, so a `make` build
+refuses them.
 
-**Stub files & git.** The stubs live at `internal/builtin/stubs/<role>/<os>_<arch>.stub`
-and are committed as small text *placeholders* so `go build ./...` works on a fresh clone;
-`make` overwrites the host ones with real (multi-MB) compiled binaries. To keep those
-local rebuilds from showing up as changes, mark them skip-worktree after cloning:
-
-```sh
-git update-index --skip-worktree internal/builtin/stubs/*/*.stub
-```
-
-Never commit the built stubs. `make clean` restores the placeholders.
+**Stub files & git.** The compiled stubs live at
+`internal/builtin/stubs/<role>/<os>_<arch>.stub` and are **git-ignored** — `make` builds
+them there on demand. A plain `go build`/`go test` (no `embed_stubs` tag) embeds no stubs
+and needs none present, so a fresh clone builds with nothing to set up. `make clean`
+removes them.
 
 ## Use
 
