@@ -128,6 +128,7 @@ jobs:
           git tag "$VERSION" && git push origin "$VERSION"   # GITHUB_TOKEN → no recursion
   release:
     needs: tag
+    permissions: { contents: write }   # caps the nested goreleaser job; else it startup-fails
     uses: ./.github/workflows/release.yml
     with:    { tag: ${{ needs.tag.outputs.version }} }
     secrets: inherit
