@@ -32,7 +32,7 @@ stubs:
 vaultwright: stubs
 	go build $(GOFLAGS) -ldflags "-X $(VERPKG).Version=$(VERSION)" -o bin/vaultwright ./cmd/vaultwright
 
-# Cross-compile the full stub matrix + SHA-256 manifest into dist/ (see plan §13).
+# Cross-compile the full stub matrix + SHA-256 manifest into build/ (see plan §13).
 stubs-matrix:
 	./scripts/build-stubs.sh
 
@@ -46,6 +46,6 @@ fmt-check:
 	test -z "$$(gofmt -l cmd internal)" || (gofmt -l cmd internal; exit 1)
 
 clean:
-	rm -rf bin dist
+	rm -rf bin dist build
 	printf '%s\n' "$(PLACEHOLDER)" > $(STUBDIR)/vault/$(HOST).stub
 	printf '%s\n' "$(PLACEHOLDER)" > $(STUBDIR)/warden/$(HOST).stub

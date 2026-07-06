@@ -1,5 +1,6 @@
 /bin/
 /dist/
+/build/
 # Sealed outputs produced by `vaultwright seal`.
 *.vault
 *.warden

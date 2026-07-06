@@ -1,0 +1,94 @@
+name: Release (dispatch)
+
+# Manual entry point for a release. Resolve the version (bump the latest release, or an
+# exact version), create + push the tag, then call the reusable release workflow.
+#
+# Pushing the tag with the default GITHUB_TOKEN does NOT re-trigger release.yml's
+# `on: push: tags` (GitHub blocks workflow runs from GITHUB_TOKEN pushes to avoid
+# recursion), so the release fires exactly once — via the explicit workflow_call below.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump level, applied to the latest release (ignored if 'version' is set)"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: "Exact version to release, e.g. v0.0.4 (overrides bump)"
+        required: false
+        default: ""
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # need tags/history to bump + refuse existing
+
+      # Resolve vMAJOR.MINOR.PATCH:
+      #   - version input set → that exact version (validated)
+      #   - else               → latest release incremented by `bump`
+      # Refuses to reuse an existing release or tag.
+      - name: Resolve version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          if [ -n "$IN_VERSION" ]; then
+            version="$IN_VERSION"
+          else
+            latest=$(gh release view --json tagName -q .tagName 2>/dev/null || echo v0.0.0)
+            v=${latest#v}
+            ma=${v%%.*}; v=${v#*.}
+            mi=${v%%.*}; pa=${v#*.}
+            case "$IN_BUMP" in
+              major) ma=$((ma + 1)); mi=0; pa=0 ;;
+              minor) mi=$((mi + 1)); pa=0 ;;
+              patch) pa=$((pa + 1)) ;;
+              *) echo "unknown bump: $IN_BUMP" >&2; exit 1 ;;
+            esac
+            version="v${ma}.${mi}.${pa}"
+          fi
+          # Normalize to a leading v and validate vX.Y.Z.
+          case "$version" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            [0-9]*.[0-9]*.[0-9]*) version="v$version" ;;
+            *) echo "invalid version '$version' (want vX.Y.Z)" >&2; exit 1 ;;
+          esac
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "release $version already exists — pick a different bump/version" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "tag $version already exists — pick a different bump/version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $version"
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git push origin "$VERSION" # GITHUB_TOKEN push → does NOT trigger release.yml
+
+  release:
+    needs: tag
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.version }}
+    secrets: inherit
