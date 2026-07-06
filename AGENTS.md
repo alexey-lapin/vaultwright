@@ -138,8 +138,9 @@ full programmatic ceremony test (`TestSealUnlockEndToEnd`).
 
 1. Branch from `main` with a `feature/` prefix: `git switch -c feature/<short-slug>`.
 2. Commit, push (`git push -u origin HEAD`), open a PR (`gh pr create`).
-3. CI (`build-test` on ubuntu + macOS) runs on every PR. It's **advisory** — the ruleset
-   requires a PR but not passing checks or approvals (solo repo), so don't merge red.
+3. CI (`build-test` on ubuntu + macOS) runs on every PR and is **required** — the ruleset
+   makes both matrix checks blocking, so a PR can't merge until they're green (0 approvals
+   required; `strict` is off, so no forced rebase onto `main`).
 4. **Squash-merge** — the PR *title* becomes the single commit subject and the
    release-note line, so write it imperative + scoped (e.g. `serve: fix idle race`).
    The branch is auto-deleted on merge. (Squash is the only merge method the repo allows.)
