@@ -26,7 +26,7 @@ stubs:
 vaultwright: stubs
 	go build $(GOFLAGS) -tags embed_stubs -ldflags "-X $(VERPKG).Version=$(VERSION)" -o bin/vaultwright ./cmd/vaultwright
 
-# Cross-compile the full stub matrix + SHA-256 manifest into build/ (see plan §13).
+# Cross-compile the full stub matrix + SHA-256 manifest into build/.
 stubs-matrix:
 	./scripts/build-stubs.sh
 
