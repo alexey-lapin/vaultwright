@@ -207,6 +207,7 @@ brews:                                          # deprecated but functional; `ho
       owner: alexey-lapin
       name:  homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"     # fine-grained PAT, NOT the default token
+    directory:   Formula                       # → homebrew-tap/Formula/vaultwright.rb
     homepage:    "https://github.com/alexey-lapin/vaultwright"
     description: "Build an encrypted, embedded static-file server from a single binary"
     license:     "Apache-2.0"
