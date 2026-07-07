@@ -216,13 +216,25 @@ brews:                                          # deprecated but functional; `ho
       bin.install "vaultwright"
     test: |
       assert_match "vaultwright", shell_output("#{bin}/vaultwright version")
+
+scoops:                                         # Windows: manifest → root of scoop-bucket
+  - repository:
+      owner: alexey-lapin
+      name:  scoop-bucket
+      branch: main
+      token: "{{ .Env.SCOOP_GITHUB_TOKEN }}"   # fine-grained PAT scoped to scoop-bucket
+    homepage:    "https://github.com/alexey-lapin/vaultwright"
+    description: "Build an encrypted, embedded static-file server from a single binary"
+    license:     Apache-2.0
+    skip_upload: auto                          # no `directory` — Scoop wants root manifests
 ```
 
 Notes:
 - `github-native` disables GoReleaser's own grouping/sort — fine, categorization lives in
   `.github/release.yml` (kept).
 - `windows/arm64` is in the CLI matrix; `brews` auto-skips non-darwin/linux, so no Windows
-  in Homebrew.
+  in Homebrew. `scoops` uses the Windows `.zip` archives → a manifest with `64bit` (amd64)
+  + `arm64` blocks.
 - No build hooks and no `--parallelism 1`: build tags select each host's stubs at compile
   time, so the shared `internal/builtin/stubs` isn't mutated per target and builds run in
   parallel. The version is baked by GoReleaser's own `-ldflags` (`{{ .Tag }}` → `vX.Y.Z`).
@@ -254,22 +266,26 @@ Notes:
   basenames collide. Copies each `build/stubs/<role>/<os>_<arch>.stub` to
   `build/assets/<role>-<os>_<arch>.stub` and copies `build/SHA256SUMS` to `build/assets/`.
 
-## Homebrew: dedicated tap + token
+## Package buckets: dedicated repos + tokens
 
-The formula moves out of this repo into the pre-created `alexey-lapin/homebrew-tap`
-(`brew tap alexey-lapin/tap`). Because that's a separate, unprotected repo, GoReleaser
-commits the generated formula straight to its default branch — no PR-merge workaround, no
-ruleset bypass.
+The package definitions live in separate, pre-created, unprotected repos so GoReleaser
+commits straight to their default branch — no PR-merge workaround, no ruleset bypass:
 
-That push is cross-repo, so the default `GITHUB_TOKEN` (scoped to `vaultwright`) cannot do
-it. Use **two tokens**, least-privilege:
+- **Homebrew** → `alexey-lapin/homebrew-tap`, formula at `Formula/vaultwright.rb`
+  (`brew tap alexey-lapin/tap`).
+- **Scoop** → `alexey-lapin/scoop-bucket`, manifest `vaultwright.json` at the repo **root**
+  (`scoop bucket add alexey-lapin https://github.com/alexey-lapin/scoop-bucket`).
+
+Those pushes are cross-repo, so the default `GITHUB_TOKEN` (scoped to `vaultwright`) can't
+do them. Least-privilege, one token per bucket:
 
 - **Release on `vaultwright`** → default `GITHUB_TOKEN` (`contents: write`).
-- **Formula push to `homebrew-tap`** → `TAP_GITHUB_TOKEN`, a **fine-grained PAT** scoped to
-  only `alexey-lapin/homebrew-tap`, permission **Contents: Read and write**. Stored as an
-  Actions secret in `vaultwright`. Referenced only via `brews[].repository.token`.
+- **Formula push** → `TAP_GITHUB_TOKEN`, a **fine-grained PAT** scoped to only
+  `alexey-lapin/homebrew-tap`, **Contents: Read and write** (`brews[].repository.token`).
+- **Manifest push** → `SCOOP_GITHUB_TOKEN`, same shape but scoped to
+  `alexey-lapin/scoop-bucket` (`scoops[].repository.token`).
 
-Setup (one-time, manual): create the fine-grained PAT, add the `TAP_GITHUB_TOKEN` secret.
+Setup (one-time, manual): create each fine-grained PAT, add the matching Actions secret.
 Fine-grained PATs expire in ≤1 year → calendar a rotation reminder.
 
 ## Before / after inventory
@@ -338,8 +354,9 @@ Docs updated:
 
 ## Risks / open questions
 
-- **`TAP_GITHUB_TOKEN` secret** — must be created (fine-grained PAT, Contents: RW on
-  `homebrew-tap`) before the first release, or the `brews` push fails.
+- **Bucket token secrets** — `TAP_GITHUB_TOKEN` (Contents: RW on `homebrew-tap`) and
+  `SCOOP_GITHUB_TOKEN` (Contents: RW on `scoop-bucket`) must exist before a release, or the
+  respective `brews`/`scoops` push fails.
 - **First-tag changelog** — `github-native` on the very first release has no prior tag;
   confirm it degrades gracefully (full history vs. empty).
 - **`brews` deprecation** — functional today; a future GoReleaser may remove it, at which

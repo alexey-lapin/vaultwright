@@ -24,6 +24,13 @@ brew tap alexey-lapin/tap
 brew install vaultwright
 ```
 
+**Scoop (Windows)** — installs from the `alexey-lapin/scoop-bucket` bucket:
+
+```powershell
+scoop bucket add alexey-lapin https://github.com/alexey-lapin/scoop-bucket
+scoop install vaultwright
+```
+
 **Prebuilt binary** — grab the archive for your os/arch from the
 [latest release](https://github.com/alexey-lapin/vaultwright/releases/latest) (assets are
 named `vaultwright_<version>_<os>_<arch>.tar.gz`, `.zip` on Windows). These seal for the
