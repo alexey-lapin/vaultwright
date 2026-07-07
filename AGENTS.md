@@ -106,12 +106,14 @@ Build pipeline (GoReleaser owns `dist/`; our scripts write intermediates to `bui
 
 GoReleaser then: archives the CLIs (`tar.gz`, `.zip` on Windows; version in the name) +
 `checksums.txt`; uploads the flat stub assets + `SHA256SUMS` via `release.extra_files`;
-generates notes via `changelog: use: github-native` (honors `.github/release.yml`); and
-pushes the formula to `alexey-lapin/homebrew-tap` using the `TAP_GITHUB_TOKEN` secret (a
-fine-grained PAT, Contents: RW on that repo — NOT the default token, which can't write
-cross-repo). `brews` is deprecated in GoReleaser but still works (so `goreleaser check`
-exits non-zero on the deprecation warning — the release itself is fine). Local dry run:
-`goreleaser release --snapshot --clean` (then restore the tree as noted above).
+generates notes via `changelog: use: github-native` (honors `.github/release.yml`); pushes
+the Homebrew formula to `alexey-lapin/homebrew-tap/Formula/` (`brews`, `TAP_GITHUB_TOKEN`);
+and pushes the Scoop manifest to the root of `alexey-lapin/scoop-bucket` (`scoops`,
+`SCOOP_GITHUB_TOKEN`). Both bucket tokens are **fine-grained PATs, Contents: RW on their
+respective repo** — NOT the default `GITHUB_TOKEN`, which can't write cross-repo. `brews`
+is deprecated in GoReleaser but still works (so `goreleaser check` exits non-zero on the
+deprecation warning — the release itself is fine). Local dry run: `goreleaser release
+--snapshot --clean` (set dummy `*_GITHUB_TOKEN` envs, then restore the tree as noted above).
 
 A released CLI embeds only its host stubs; non-host targets are **downloaded** from the
 release and verified against the embedded `SHA256SUMS` (the trust root). Dev builds

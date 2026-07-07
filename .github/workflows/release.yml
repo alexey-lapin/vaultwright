@@ -48,3 +48,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # release on this repo
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }} # formula push to homebrew-tap
+          SCOOP_GITHUB_TOKEN: ${{ secrets.SCOOP_GITHUB_TOKEN }} # manifest push to scoop-bucket

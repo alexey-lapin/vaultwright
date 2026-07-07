@@ -67,3 +67,17 @@ brews:
       bin.install "vaultwright"
     test: |
       assert_match "vaultwright", shell_output("#{bin}/vaultwright version")
+
+scoops:
+  - repository:
+      owner: alexey-lapin
+      name: scoop-bucket
+      branch: main
+      token: "{{ .Env.SCOOP_GITHUB_TOKEN }}" # fine-grained PAT scoped to scoop-bucket
+    # No directory: Scoop wants manifests at the bucket root (else `scoop bucket list`
+    # reports 0). Uses the Windows .zip archives; other targets are ignored.
+    homepage: "https://github.com/alexey-lapin/vaultwright"
+    description: "Build an encrypted, embedded static-file server from a single binary"
+    license: Apache-2.0
+    commit_msg_template: "Scoop update for vaultwright version {{ .Tag }}"
+    skip_upload: auto # skip the manifest push for prereleases
