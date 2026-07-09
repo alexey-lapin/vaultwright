@@ -132,11 +132,13 @@ typing words (e.g. `aban` → `abandon`); a mistyped word is caught by the check
 | Flag | Meaning |
 |------|---------|
 | `-o <name>` | Output base name (default: the assets dir name). |
-| `--warden-pass` | Also protect the warden binary with a passphrase (prompted). |
 | `--vault-target os/arch` | Vault target platform (repeatable; default: host). |
 | `--warden-target os/arch` | Warden target platform (repeatable; default: host). |
 | `--stub-dir <dir>` | Resolve stubs from this directory first (offline mirror). |
 | `--offline` | Never download stubs (embedded / cache / `--stub-dir` only). |
+
+`seal` always prompts for the vault password and a warden passphrase; leave the
+warden passphrase empty to produce a warden with no passphrase protection.
 
 Targets are independent and may be repeated, e.g. build a Windows + Linux vault with a
 macOS warden — all from one keypair:
@@ -183,7 +185,8 @@ wordlist). No magic headers, no plaintext wordlist.
   useless next time. (This is why the codes are word phrases, not short PINs — a
   non-replayable asymmetric exchange can't fit in a handful of characters.)
 - **`warden` is the factor:** whoever has the `warden` binary + the password can
-  unlock. Protect it like a hardware key; optionally add `--warden-pass`.
+  unlock. Protect it like a hardware key; optionally give it a passphrase at
+  `seal` time.
 - **In scope:** hiding asset *content and type*. **Out of scope:** hiding that
   encrypted data exists at all (entropy analysis still sees a high-entropy blob);
   a compromised trusted machine.
