@@ -10,12 +10,9 @@ challenge–response with a separate responder binary you keep on a trusted mach
 
 After unlock the files are served from memory on a random loopback port.
 
-**Status:** released. Multi-target builds with on-demand, hash-verified stub download
-work end-to-end.
-
 ## Install
 
-**Homebrew (recommended)** — installs from the `alexey-lapin/homebrew-tap` tap. `brew`
+**Homebrew** — installs from the `alexey-lapin/homebrew-tap` tap. `brew`
 downloads without the macOS quarantine attribute, so the CLI runs without a Gatekeeper
 prompt:
 
@@ -24,7 +21,7 @@ brew tap alexey-lapin/tap
 brew install vaultwright
 ```
 
-**Scoop (Windows)** — installs from the `alexey-lapin/scoop-bucket` bucket:
+**Scoop** — installs from the `alexey-lapin/scoop-bucket` bucket:
 
 ```powershell
 scoop bucket add alexey-lapin https://github.com/alexey-lapin/scoop-bucket
@@ -127,6 +124,11 @@ typing words (e.g. `aban` → `abandon`); a mistyped word is caught by the check
 | `--entry-point` | `index.html` | Directory document served at the root. |
 | `--fallback` | off | Serve the entry-point for unmatched non-file routes (SPA refresh/deep links). |
 
+The path-key is a random segment prepended to every served path (e.g.
+`/c8f3a91b/index.html`), so another process or browser tab sharing the loopback
+interface can't reach your files by guessing the port. `--no-path-key` drops it if
+you don't need that extra layer (e.g. a fixed `--port` behind your own proxy).
+
 ### `vaultwright seal` flags
 
 | Flag | Meaning |
@@ -158,8 +160,11 @@ vaultwright seal ./site -o demo \
 
 With explicit targets the outputs are suffixed (and `.exe` is added for Windows);
 the plain host default writes `demo.vault` / `demo.warden`. Non-host stubs are
-downloaded from the release and verified against the embedded SHA-256 manifest;
-pre-fetch them with `vaultwright fetch-stubs --all` (or `fetch-stubs os/arch …`).
+downloaded from the release and verified against the embedded SHA-256 manifest,
+then cached at `<user cache>/vaultwright/stubs` for reuse. `vaultwright fetch-stubs
+--all` (or `fetch-stubs os/arch …`) pre-populates that cache for offline sealing
+later (`seal --offline` then refuses anything not already cached or embedded);
+`vaultwright cache` prints the cache directory, e.g. to clear it.
 
 ## How it works
 
