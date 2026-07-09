@@ -33,6 +33,8 @@ func main() {
 		err = seal(os.Args[2:])
 	case "fetch-stubs":
 		err = fetchStubs(os.Args[2:])
+	case "cache":
+		err = printCacheDir()
 	default:
 		usage()
 		os.Exit(2)
@@ -49,6 +51,7 @@ func usage() {
 usage:
   vaultwright seal <assets-dir> [flags]
   vaultwright fetch-stubs [--all | <os>/<arch> ...] [--stub-dir dir]
+  vaultwright cache
   vaultwright version
 
 seal flags:
@@ -294,6 +297,16 @@ func fetchStubs(args []string) error {
 		}
 		fmt.Printf("  ok  %s %s/%s\n", t.Role, t.OS, t.Arch)
 	}
+	return nil
+}
+
+// printCacheDir prints the download cache directory (like `brew --cache`).
+func printCacheDir() error {
+	dir, err := stubs.DefaultCacheDir()
+	if err != nil {
+		return err
+	}
+	fmt.Println(dir)
 	return nil
 }
 
