@@ -104,7 +104,7 @@ func seal(args []string) error {
 	}
 
 	// Resolve every stub up front so we fail before prompting for a password.
-	resOpt := stubs.Options{StubDir: o.stubDir, Offline: o.offline}
+	resOpt := stubs.Options{StubDir: o.stubDir, Offline: o.offline, Log: logToStderr}
 	vaultStubs, err := resolveAll(stubs.RoleVault, o.vaultTargets, resOpt)
 	if err != nil {
 		return err
@@ -290,7 +290,7 @@ func fetchStubs(args []string) error {
 		return fmt.Errorf("nothing to fetch: pass --all or one or more os/arch")
 	}
 
-	opt := stubs.Options{StubDir: stubDir}
+	opt := stubs.Options{StubDir: stubDir, Log: logToStderr}
 	for _, t := range targets {
 		if _, err := stubs.Resolve(t.Role, t.OS, t.Arch, opt); err != nil {
 			return fmt.Errorf("%s %s/%s: %w", t.Role, t.OS, t.Arch, err)
@@ -298,6 +298,12 @@ func fetchStubs(args []string) error {
 		fmt.Printf("  ok  %s %s/%s\n", t.Role, t.OS, t.Arch)
 	}
 	return nil
+}
+
+// logToStderr is passed as stubs.Options.Log so a network fetch is visible
+// (they can take a while, and otherwise happen silently mid-command).
+func logToStderr(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format, args...)
 }
 
 // printCacheDir prints the download cache directory (like `brew --cache`).

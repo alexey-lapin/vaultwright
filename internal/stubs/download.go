@@ -53,6 +53,7 @@ func fetchFromCacheOrDownload(role, goos, goarch string, opt Options) ([]byte, e
 	}
 
 	url := fmt.Sprintf("%s/%s/%s", opt.BaseURL, opt.Version, downloadAssetName(role, goos, goarch))
+	opt.Log("downloading %s %s/%s stub (%s)...\n", role, goos, goarch, opt.Version)
 	data, err := httpGet(opt.HTTPClient, url)
 	if err != nil {
 		return nil, err
