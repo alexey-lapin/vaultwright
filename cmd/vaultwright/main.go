@@ -56,11 +56,13 @@ usage:
 
 seal flags:
   -o name              output base name (default: the assets dir name)
-  --warden-pass        also protect the warden binary with a passphrase (prompted)
   --vault-target os/arch    vault target (repeatable; default: host)
   --warden-target os/arch   warden target (repeatable; default: host)
   --stub-dir dir       resolve stubs from this directory first
   --offline            never download stubs (embedded/cache/stub-dir only)
+
+seal always prompts for a vault password and a warden passphrase; leave the
+warden passphrase empty to produce a warden with no passphrase protection.
 
 produces (host default):
   <name>.vault   the server you run/distribute (public key + encrypted assets)
@@ -80,7 +82,6 @@ targets (--vault-target, --warden-target, fetch-stubs):
 type sealOpts struct {
 	dir           string
 	out           string
-	wardenPass    bool
 	stubDir       string
 	offline       bool
 	vaultTargets  []stubs.Target
@@ -125,12 +126,9 @@ func seal(args []string) error {
 	if err != nil {
 		return err
 	}
-	var wardenPass []byte
-	if o.wardenPass {
-		wardenPass, err = readNewPassword("Warden passphrase: ")
-		if err != nil {
-			return err
-		}
+	wardenPass, err := readNewPassword("Warden passphrase (empty = none): ")
+	if err != nil {
+		return err
 	}
 
 	// One keypair / one payload-pair, stamped onto every requested stub.
@@ -212,8 +210,6 @@ func parseSealArgs(args []string) (sealOpts, error) {
 				return o, err
 			}
 			o.out, i = v, i+1
-		case "--warden-pass":
-			o.wardenPass = true
 		case "--offline":
 			o.offline = true
 		case "--stub-dir":
