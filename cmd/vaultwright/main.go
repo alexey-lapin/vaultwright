@@ -67,6 +67,13 @@ produces (host default):
   <name>.warden  the responder you keep on a trusted machine (the 2nd factor)
 with explicit targets the outputs are suffixed, e.g. <name>.vault-linux-arm64,
 and .exe is added for windows.
+
+targets (--vault-target, --warden-target, fetch-stubs):
+  form:  <os>/<arch>, e.g. linux/amd64, darwin/arm64, windows/amd64
+  os:    darwin, linux, windows
+  arch:  amd64, arm64
+  (any os/arch combination of the above; a target with no matching stub
+  falls back to a download and fails there if none exists)
 `)
 }
 
@@ -247,7 +254,7 @@ func parseSealArgs(args []string) (sealOpts, error) {
 func parseTarget(s string) (goos, goarch string, err error) {
 	goos, goarch, ok := strings.Cut(s, "/")
 	if !ok || goos == "" || goarch == "" {
-		return "", "", fmt.Errorf("target %q must be in os/arch form (e.g. linux/arm64)", s)
+		return "", "", fmt.Errorf("target %q must be in os/arch form, e.g. linux/amd64, darwin/arm64, windows/amd64 (run `vaultwright` for the full list)", s)
 	}
 	return goos, goarch, nil
 }
