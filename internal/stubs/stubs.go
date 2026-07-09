@@ -44,16 +44,26 @@ func (o *Options) fillDefaults() error {
 		o.BaseURL = "https://github.com/" + releaseRepo() + "/releases/download"
 	}
 	if o.CacheDir == "" {
-		base, err := os.UserCacheDir()
+		dir, err := DefaultCacheDir()
 		if err != nil {
-			return fmt.Errorf("stubs: locating cache dir: %w", err)
+			return err
 		}
-		o.CacheDir = filepath.Join(base, "vaultwright", "stubs")
+		o.CacheDir = dir
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{Timeout: 60 * time.Second}
 	}
 	return nil
+}
+
+// DefaultCacheDir returns the default download cache directory:
+// <user cache>/vaultwright/stubs.
+func DefaultCacheDir() (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("stubs: locating cache dir: %w", err)
+	}
+	return filepath.Join(base, "vaultwright", "stubs"), nil
 }
 
 // Resolve returns the stub bytes for role and the GOOS/GOARCH target.
