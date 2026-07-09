@@ -24,13 +24,14 @@ const (
 // vaultwright build (embedded manifest/version, default cache dir and release URL);
 // tests override them.
 type Options struct {
-	StubDir    string       // checked first: <StubDir>/<role>/<os>_<arch>.stub
-	Offline    bool         // disable network download
-	Version    string       // default: builtin.Version
-	Manifest   Manifest     // default: parsed builtin.Manifest()
-	BaseURL    string       // default: https://github.com/<repo>/releases/download
-	CacheDir   string       // default: <user cache>/vaultwright/stubs
-	HTTPClient *http.Client // default: 60s-timeout client
+	StubDir    string                           // checked first: <StubDir>/<role>/<os>_<arch>.stub
+	Offline    bool                             // disable network download
+	Version    string                           // default: builtin.Version
+	Manifest   Manifest                         // default: parsed builtin.Manifest()
+	BaseURL    string                           // default: https://github.com/<repo>/releases/download
+	CacheDir   string                           // default: <user cache>/vaultwright/stubs
+	HTTPClient *http.Client                     // default: 60s-timeout client
+	Log        func(format string, args ...any) // default: no-op; called when a stub is downloaded
 }
 
 func (o *Options) fillDefaults() error {
@@ -52,6 +53,9 @@ func (o *Options) fillDefaults() error {
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{Timeout: 60 * time.Second}
+	}
+	if o.Log == nil {
+		o.Log = func(string, ...any) {}
 	}
 	return nil
 }
