@@ -94,7 +94,7 @@ func TestSealUnlockEndToEnd(t *testing.T) {
 	wl := loadWordlist(t)
 	password := []byte("hunter2-but-better")
 
-	vaultPayload, wardenPayload, err := Seal(dir, wl, password, nil)
+	vaultPayload, wardenPayload, err := Seal(dir, wl, password, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,12 +106,65 @@ func TestSealUnlockEndToEnd(t *testing.T) {
 	if got := string(files["css/style.css"]); got != "body{}" {
 		t.Fatalf("css/style.css = %q", got)
 	}
+
+	// OpenAssetsSolo (single-factor path) must refuse a two-factor meta.
+	meta, err := OpenVaultMeta(vaultPayload, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := meta.OpenAssetsSolo(); err == nil {
+		t.Fatal("expected OpenAssetsSolo to refuse a two-factor vault")
+	}
+}
+
+func TestSealUnlockSingleFactor(t *testing.T) {
+	dir := writeAssets(t)
+	wl := loadWordlist(t)
+	password := []byte("hunter2-but-better")
+
+	vaultPayload, wardenPayload, err := Seal(dir, wl, password, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wardenPayload != nil {
+		t.Fatal("expected no warden payload for a single-factor seal")
+	}
+
+	meta, err := OpenVaultMeta(vaultPayload, password)
+	if err != nil {
+		t.Fatalf("open meta: %v", err)
+	}
+	if meta.TwoFactor {
+		t.Fatal("expected TwoFactor=false for a single-factor seal")
+	}
+	if len(meta.PK) != 0 || len(meta.Wordlist) != 0 {
+		t.Fatal("expected no PK/Wordlist for a single-factor seal")
+	}
+
+	files, err := meta.OpenAssetsSolo()
+	if err != nil {
+		t.Fatalf("open assets solo: %v", err)
+	}
+	if got := string(files["index.html"]); got != "<h1>hi</h1>" {
+		t.Fatalf("index.html = %q", got)
+	}
+
+	// Wrong password fails at the metadata step, same as two-factor.
+	if _, err := OpenVaultMeta(vaultPayload, []byte("wrong")); err == nil {
+		t.Fatal("expected wrong password to fail")
+	}
+
+	// OpenAssets (two-factor path) must refuse a single-factor meta.
+	ePriv, _, _ := NewChallenge()
+	if _, err := meta.OpenAssets(ePriv, make([]byte, 16)); err == nil {
+		t.Fatal("expected OpenAssets to refuse a single-factor vault")
+	}
 }
 
 func TestSealUnlockWithWardenPass(t *testing.T) {
 	dir := writeAssets(t)
 	wl := loadWordlist(t)
-	vaultPayload, wardenPayload, err := Seal(dir, wl, []byte("pw"), []byte("warden-secret"))
+	vaultPayload, wardenPayload, err := Seal(dir, wl, []byte("pw"), []byte("warden-secret"), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +184,7 @@ func TestSealUnlockWithWardenPass(t *testing.T) {
 func TestWrongPasswordRejectedAtMeta(t *testing.T) {
 	dir := writeAssets(t)
 	wl := loadWordlist(t)
-	vaultPayload, _, err := Seal(dir, wl, []byte("right"), nil)
+	vaultPayload, _, err := Seal(dir, wl, []byte("right"), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,12 +197,12 @@ func TestWrongWardenProducesUndecryptableAssets(t *testing.T) {
 	dir := writeAssets(t)
 	wl := loadWordlist(t)
 	password := []byte("pw")
-	vaultPayload, _, err := Seal(dir, wl, password, nil)
+	vaultPayload, _, err := Seal(dir, wl, password, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// A different seal => different warden => wrong response.
-	_, otherWarden, _ := Seal(dir, wl, password, nil)
+	_, otherWarden, _ := Seal(dir, wl, password, nil, false)
 
 	meta, _ := OpenVaultMeta(vaultPayload, password)
 	ePriv, challenge, _ := NewChallenge()
@@ -168,7 +221,7 @@ func TestPayloadUnscannable(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>"+marker+"</h1>"), 0o644)
 	wl := loadWordlist(t)
 
-	vaultPayload, wardenPayload, err := Seal(dir, wl, []byte("pw"), nil)
+	vaultPayload, wardenPayload, err := Seal(dir, wl, []byte("pw"), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

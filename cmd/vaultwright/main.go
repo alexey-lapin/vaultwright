@@ -60,13 +60,19 @@ seal flags:
   --warden-target os/arch   warden target (repeatable; default: host)
   --stub-dir dir       resolve stubs from this directory first
   --offline            never download stubs (embedded/cache/stub-dir only)
+  --no-warden          single-factor: password only, no warden produced
 
 seal always prompts for a vault password and a warden passphrase; leave the
 warden passphrase empty to produce a warden with no passphrase protection.
+--no-warden skips the warden entirely (conflicts with --warden-target) — the
+vault then unlocks on the password alone, with no 2nd-factor handshake. This
+is a real reduction in the security model (see SECURITY.md); use only when
+the warden's threat model doesn't apply to your use case.
 
 produces (host default):
   <name>.vault   the server you run/distribute (public key + encrypted assets)
-  <name>.warden  the responder you keep on a trusted machine (the 2nd factor)
+  <name>.warden  the responder you keep on a trusted machine (the 2nd factor;
+                 omitted with --no-warden)
 with explicit targets the outputs are suffixed, e.g. <name>.vault-linux-arm64,
 and .exe is added for windows.
 
@@ -84,6 +90,7 @@ type sealOpts struct {
 	out           string
 	stubDir       string
 	offline       bool
+	noWarden      bool
 	vaultTargets  []stubs.Target
 	wardenTargets []stubs.Target
 }
@@ -92,6 +99,9 @@ func seal(args []string) error {
 	o, err := parseSealArgs(args)
 	if err != nil {
 		return err
+	}
+	if o.noWarden && len(o.wardenTargets) > 0 {
+		return fmt.Errorf("--no-warden conflicts with --warden-target")
 	}
 	info, err := os.Stat(o.dir)
 	if err != nil || !info.IsDir() {
@@ -103,12 +113,15 @@ func seal(args []string) error {
 
 	// Explicit targets get suffixed output names; the plain host default does not.
 	vaultSuffixed := len(o.vaultTargets) > 0
-	wardenSuffixed := len(o.wardenTargets) > 0
 	if !vaultSuffixed {
 		o.vaultTargets = []stubs.Target{hostTarget(stubs.RoleVault)}
 	}
-	if !wardenSuffixed {
-		o.wardenTargets = []stubs.Target{hostTarget(stubs.RoleWarden)}
+	var wardenSuffixed bool
+	if !o.noWarden {
+		wardenSuffixed = len(o.wardenTargets) > 0
+		if !wardenSuffixed {
+			o.wardenTargets = []stubs.Target{hostTarget(stubs.RoleWarden)}
+		}
 	}
 
 	// Resolve every stub up front so we fail before prompting for a password.
@@ -117,22 +130,28 @@ func seal(args []string) error {
 	if err != nil {
 		return err
 	}
-	wardenStubs, err := resolveAll(stubs.RoleWarden, o.wardenTargets, resOpt)
-	if err != nil {
-		return err
+	var wardenStubs [][]byte
+	if !o.noWarden {
+		wardenStubs, err = resolveAll(stubs.RoleWarden, o.wardenTargets, resOpt)
+		if err != nil {
+			return err
+		}
 	}
 
 	password, err := readNewPassword("Password (for the vault): ")
 	if err != nil {
 		return err
 	}
-	wardenPass, err := readNewPassword("Warden passphrase (empty = none): ")
-	if err != nil {
-		return err
+	var wardenPass []byte
+	if !o.noWarden {
+		wardenPass, err = readNewPassword("Warden passphrase (empty = none): ")
+		if err != nil {
+			return err
+		}
 	}
 
 	// One keypair / one payload-pair, stamped onto every requested stub.
-	vaultPayload, wardenPayload, err := scheme.Seal(o.dir, builtin.Wordlist, password, wardenPass)
+	vaultPayload, wardenPayload, err := scheme.Seal(o.dir, builtin.Wordlist, password, wardenPass, o.noWarden)
 	wipe(password)
 	wipe(wardenPass)
 	if err != nil {
@@ -153,8 +172,10 @@ func seal(args []string) error {
 	if err := write(o.vaultTargets, vaultStubs, vaultPayload, vaultSuffixed); err != nil {
 		return err
 	}
-	if err := write(o.wardenTargets, wardenStubs, wardenPayload, wardenSuffixed); err != nil {
-		return err
+	if !o.noWarden {
+		if err := write(o.wardenTargets, wardenStubs, wardenPayload, wardenSuffixed); err != nil {
+			return err
+		}
 	}
 
 	fmt.Println("Sealed:")
@@ -212,6 +233,8 @@ func parseSealArgs(args []string) (sealOpts, error) {
 			o.out, i = v, i+1
 		case "--offline":
 			o.offline = true
+		case "--no-warden":
+			o.noWarden = true
 		case "--stub-dir":
 			v, err := need(i)
 			if err != nil {

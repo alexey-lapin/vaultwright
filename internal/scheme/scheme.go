@@ -24,23 +24,44 @@ func wardenStaticKey() []byte {
 	return h[:]
 }
 
+// metaMode tags the vault metadata plaintext (inside MetaCT, so it's only visible
+// once the password is known) with which unlock path the vault expects.
+const (
+	metaModeTwoFactor byte = 0
+	metaModeSolo      byte = 1
+)
+
 // Seal encrypts assetsDir and returns the payloads to append to the vault and
 // warden stubs. wordlist is the raw newline-separated BIP39 list. wardenPass may
-// be empty (obfuscation only).
-func Seal(assetsDir string, wordlist, password, wardenPass []byte) (vaultPayload, wardenPayload []byte, err error) {
+// be empty (obfuscation only). If noWarden is true, the vault is single-factor
+// (password only): no keypair/handshake, no warden — wardenPayload is nil and
+// wardenPass is ignored.
+func Seal(assetsDir string, wordlist, password, wardenPass []byte, noWarden bool) (vaultPayload, wardenPayload []byte, err error) {
 	salt, err := cryptocore.NewSalt()
 	if err != nil {
 		return nil, nil, err
 	}
 	p := cryptocore.DeriveP(password, salt)
 
-	sk, err := cryptocore.NewKeyPair()
-	if err != nil {
-		return nil, nil, err
+	var ka, metaPlain []byte
+	if noWarden {
+		ka = cryptocore.DeriveAssetKeySolo(p)
+		metaPlain = []byte{metaModeSolo}
+	} else {
+		sk, err := cryptocore.NewKeyPair()
+		if err != nil {
+			return nil, nil, err
+		}
+		pk := sk.PublicKey().Bytes()
+		share := cryptocore.DeriveShare(sk)
+		ka = cryptocore.DeriveAssetKey(share, p)
+		metaPlain = append([]byte{metaModeTwoFactor}, concat(pk, wordlist)...)
+
+		wardenPayload, err = sealWarden(sk.Bytes(), wordlist, wardenPass)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	pk := sk.PublicKey().Bytes()
-	share := cryptocore.DeriveShare(sk)
-	ka := cryptocore.DeriveAssetKey(share, p)
 
 	tarBytes, err := archive.Create(assetsDir)
 	if err != nil {
@@ -51,16 +72,19 @@ func Seal(assetsDir string, wordlist, password, wardenPass []byte) (vaultPayload
 		return nil, nil, err
 	}
 
-	metaCT, err := cryptocore.Seal(p, concat(pk, wordlist), nil)
+	metaCT, err := cryptocore.Seal(p, metaPlain, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	vaultPayload = blob.VaultPayload{Salt: salt, MetaCT: metaCT, AssetCT: assetCT}.Marshal()
 
-	// Warden payload.
+	return vaultPayload, wardenPayload, nil
+}
+
+func sealWarden(skBytes, wordlist, wardenPass []byte) ([]byte, error) {
 	wsalt, err := cryptocore.NewSalt()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	var wkey []byte
 	hasPass := len(wardenPass) > 0
@@ -69,25 +93,24 @@ func Seal(assetsDir string, wordlist, password, wardenPass []byte) (vaultPayload
 	} else {
 		wkey = wardenStaticKey()
 	}
-	wCT, err := cryptocore.Seal(wkey, concat(sk.Bytes(), wordlist), nil)
+	wCT, err := cryptocore.Seal(wkey, concat(skBytes, wordlist), nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	wardenPayload = blob.WardenPayload{HasPass: hasPass, Salt: wsalt, CT: wCT}.Marshal()
-
-	return vaultPayload, wardenPayload, nil
+	return blob.WardenPayload{HasPass: hasPass, Salt: wsalt, CT: wCT}.Marshal(), nil
 }
 
 // VaultMeta is the result of opening the vault's password-protected metadata.
 type VaultMeta struct {
-	PK       []byte // warden public key
-	Wordlist []byte // raw BIP39 list
-	p        []byte // password key, kept for asset decryption
-	assetCT  []byte
+	TwoFactor bool   // false for a single-factor (--no-warden) vault
+	PK        []byte // warden public key; empty unless TwoFactor
+	Wordlist  []byte // raw BIP39 list; empty unless TwoFactor
+	p         []byte // password key, kept for asset decryption
+	assetCT   []byte
 }
 
 // OpenVaultMeta decrypts the metadata with the password. A wrong password fails
-// here, before the handshake.
+// here, before the handshake (if any).
 func OpenVaultMeta(vaultPayload, password []byte) (*VaultMeta, error) {
 	vp, err := blob.ParseVaultPayload(vaultPayload, cryptocore.SaltLen)
 	if err != nil {
@@ -98,15 +121,27 @@ func OpenVaultMeta(vaultPayload, password []byte) (*VaultMeta, error) {
 	if err != nil {
 		return nil, fmt.Errorf("wrong password")
 	}
-	if len(metaPlain) < pkLen {
+	if len(metaPlain) < 1 {
 		return nil, fmt.Errorf("scheme: corrupt metadata")
 	}
-	return &VaultMeta{
-		PK:       metaPlain[:pkLen],
-		Wordlist: metaPlain[pkLen:],
-		p:        p,
-		assetCT:  vp.AssetCT,
-	}, nil
+	mode, rest := metaPlain[0], metaPlain[1:]
+	switch mode {
+	case metaModeSolo:
+		return &VaultMeta{p: p, assetCT: vp.AssetCT}, nil
+	case metaModeTwoFactor:
+		if len(rest) < pkLen {
+			return nil, fmt.Errorf("scheme: corrupt metadata")
+		}
+		return &VaultMeta{
+			TwoFactor: true,
+			PK:        rest[:pkLen],
+			Wordlist:  rest[pkLen:],
+			p:         p,
+			assetCT:   vp.AssetCT,
+		}, nil
+	default:
+		return nil, fmt.Errorf("scheme: corrupt metadata")
+	}
 }
 
 // NewChallenge generates an ephemeral keypair; the public bytes are the challenge.
@@ -121,6 +156,9 @@ func NewChallenge() (ePriv *ecdh.PrivateKey, challenge []byte, err error) {
 // OpenAssets completes the unlock: recover the share from the warden response,
 // derive K_a, decrypt and extract the files.
 func (m *VaultMeta) OpenAssets(ePriv *ecdh.PrivateKey, response []byte) (map[string][]byte, error) {
+	if !m.TwoFactor {
+		return nil, fmt.Errorf("scheme: vault is single-factor, no handshake to complete")
+	}
 	share, err := cryptocore.RecoverShare(ePriv, m.PK, response)
 	if err != nil {
 		return nil, err
@@ -129,6 +167,20 @@ func (m *VaultMeta) OpenAssets(ePriv *ecdh.PrivateKey, response []byte) (map[str
 	tarBytes, err := cryptocore.Open(ka, m.assetCT, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unlock failed: wrong response or password")
+	}
+	return archive.Extract(tarBytes)
+}
+
+// OpenAssetsSolo completes the unlock for a single-factor (--no-warden) vault:
+// no handshake, K_a is derived from the password alone.
+func (m *VaultMeta) OpenAssetsSolo() (map[string][]byte, error) {
+	if m.TwoFactor {
+		return nil, fmt.Errorf("scheme: vault is two-factor, a warden handshake is required")
+	}
+	ka := cryptocore.DeriveAssetKeySolo(m.p)
+	tarBytes, err := cryptocore.Open(ka, m.assetCT, nil)
+	if err != nil {
+		return nil, fmt.Errorf("wrong password")
 	}
 	return archive.Extract(tarBytes)
 }
