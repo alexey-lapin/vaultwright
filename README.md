@@ -136,9 +136,15 @@ typing words (e.g. `aban` → `abandon`); a mistyped word is caught by the check
 | `--warden-target os/arch` | Warden target platform (repeatable; default: host). |
 | `--stub-dir <dir>` | Resolve stubs from this directory first (offline mirror). |
 | `--offline` | Never download stubs (embedded / cache / `--stub-dir` only). |
+| `--no-warden` | Single-factor: password only, no `.warden` produced (see below). |
 
 `seal` always prompts for the vault password and a warden passphrase; leave the
 warden passphrase empty to produce a warden with no passphrase protection.
+
+`--no-warden` drops the second factor entirely: the vault unlocks on the password
+alone, with no handshake and no `.warden` file. This is a real reduction of the
+security model (see [`SECURITY.md`](SECURITY.md)) — use it only where the warden's
+threat model genuinely doesn't apply. It conflicts with `--warden-target`.
 
 Targets are independent and may be repeated, e.g. build a Windows + Linux vault with a
 macOS warden — all from one keypair:
@@ -171,6 +177,9 @@ handshake — challenge = its ephemeral public key (24 words), response =
 and decrypts. A wrong password fails at the metadata step; a wrong response fails
 at asset decryption.
 
+With `--no-warden` there is no keypair, no share, and no handshake: `K_a =
+HKDF(P)` and `vault` decrypts as soon as the password checks out.
+
 On disk the vault contains only a plaintext random salt followed by opaque
 ciphertext (assets, and a password-encrypted blob holding the public key and the
 wordlist). No magic headers, no plaintext wordlist.
@@ -187,6 +196,9 @@ wordlist). No magic headers, no plaintext wordlist.
 - **`warden` is the factor:** whoever has the `warden` binary + the password can
   unlock. Protect it like a hardware key; optionally give it a passphrase at
   `seal` time.
+- **`--no-warden` is opt-in single-factor:** drops the second factor — a leaked
+  password alone is then enough to decrypt. Only use it where that tradeoff is
+  acceptable.
 - **In scope:** hiding asset *content and type*. **Out of scope:** hiding that
   encrypted data exists at all (entropy analysis still sees a high-entropy blob);
   a compromised trusted machine.

@@ -39,9 +39,10 @@ const (
 
 // info labels for HKDF derivations; distinct labels domain-separate the outputs.
 const (
-	infoShare   = "vaultwright/asset-share/v1"
-	infoAssetK  = "vaultwright/asset-key/v1"
-	infoRespPad = "vaultwright/response-pad/v1"
+	infoShare      = "vaultwright/asset-share/v1"
+	infoAssetK     = "vaultwright/asset-key/v1"
+	infoAssetKSolo = "vaultwright/asset-key-single-factor/v1"
+	infoRespPad    = "vaultwright/response-pad/v1"
 )
 
 // NewSalt returns a fresh random salt.
@@ -69,6 +70,13 @@ func DeriveAssetKey(share, p []byte) []byte {
 	in = append(in, share...)
 	in = append(in, p...)
 	return hkdfKey(in, nil, infoAssetK, AssetKeyLen)
+}
+
+// DeriveAssetKeySolo derives K_a from the password key P alone, for single-factor
+// (--no-warden) seals: no handshake share, no warden. A distinct info label keeps
+// it domain-separated from DeriveAssetKey.
+func DeriveAssetKeySolo(p []byte) []byte {
+	return hkdfKey(p, nil, infoAssetKSolo, AssetKeyLen)
 }
 
 // Seal encrypts plaintext with XChaCha20-Poly1305 under key, prepending a random

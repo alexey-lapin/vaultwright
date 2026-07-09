@@ -1,6 +1,7 @@
 // Command vault is the sealed server stub. vaultwright appends an encrypted payload to
-// a copy of this binary; at runtime it unlocks with a password plus a fresh
-// challenge-response with the matching warden, then serves the files from memory.
+// a copy of this binary; at runtime it unlocks with a password (plus, unless sealed
+// with --no-warden, a fresh challenge-response with the matching warden), then
+// serves the files from memory.
 package main
 
 import (
@@ -49,14 +50,22 @@ func run(idle time.Duration, port int, addr string, pathKey bool, entry string, 
 	if err != nil {
 		return err
 	}
-	list, err := wordcodec.NewList(wordcodec.ParseWordlist(meta.Wordlist))
-	if err != nil {
-		return err
-	}
 
-	files, err := handshake(meta, list)
-	if err != nil {
-		return err
+	var files map[string][]byte
+	if meta.TwoFactor {
+		list, err := wordcodec.NewList(wordcodec.ParseWordlist(meta.Wordlist))
+		if err != nil {
+			return err
+		}
+		files, err = handshake(meta, list)
+		if err != nil {
+			return err
+		}
+	} else {
+		files, err = meta.OpenAssetsSolo()
+		if err != nil {
+			return err
+		}
 	}
 
 	srv, err := serve.New(files, serve.Options{

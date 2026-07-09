@@ -26,6 +26,11 @@ resisting replay.
 can still see a high-entropy blob); a compromised machine that holds `warden`;
 attacks requiring the operator to run `warden` against an attacker's challenge.
 
+`vaultwright seal --no-warden` opts out of the second factor: the vault unlocks on
+the password alone, with no `warden` binary produced and no handshake. This is a
+real reduction of the threat model above — a leaked password is then sufficient by
+itself — so only use it where the warden's threat model genuinely doesn't apply.
+
 ## Distribution integrity
 
 Release stubs downloaded on demand are verified against a SHA-256 manifest embedded
