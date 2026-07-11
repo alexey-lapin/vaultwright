@@ -138,13 +138,13 @@ func seal(args []string) error {
 		}
 	}
 
-	password, err := readNewPassword("Password (for the vault): ")
+	password, err := readNewPassword("Vault password: ", "Vault password confirm: ")
 	if err != nil {
 		return err
 	}
 	var wardenPass []byte
 	if !o.noWarden {
-		wardenPass, err = readNewPassword("Warden passphrase (empty = none): ")
+		wardenPass, err = readNewPassword("Warden passphrase (empty = none): ", "Warden passphrase confirm: ")
 		if err != nil {
 			return err
 		}
@@ -343,12 +343,12 @@ func printCacheDir() error {
 }
 
 // readNewPassword prompts twice and confirms the two entries match.
-func readNewPassword(label string) ([]byte, error) {
+func readNewPassword(label, confirmLabel string) ([]byte, error) {
 	first, err := prompt.Password(label)
 	if err != nil {
 		return nil, err
 	}
-	again, err := prompt.Password("Confirm: ")
+	again, err := prompt.Password(confirmLabel)
 	if err != nil {
 		return nil, err
 	}
