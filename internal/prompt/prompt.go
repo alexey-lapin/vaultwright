@@ -20,6 +20,17 @@ import (
 	"github.com/alexey-lapin/vaultwright/internal/wordcodec"
 )
 
+// Attempts is how many wrong guesses vault/warden allow before giving up, for both a
+// password/passphrase and a challenge-response phrase.
+const Attempts = 3
+
+// Wipe zeroes a secret buffer (password, passphrase, decoded phrase) after use.
+func Wipe(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
 // Password reads a line without echoing it.
 func Password(label string) ([]byte, error) {
 	fmt.Fprint(os.Stderr, label)

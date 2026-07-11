@@ -26,18 +26,12 @@ func run() error {
 		return fmt.Errorf("%w (this binary was not produced by `vaultwright seal`)", err)
 	}
 
-	var pass []byte
-	if hasPass, err := scheme.WardenHasPass(payload); err != nil {
+	hasPass, err := scheme.WardenHasPass(payload)
+	if err != nil {
 		return err
-	} else if hasPass {
-		pass, err = prompt.Password("Warden passphrase: ")
-		if err != nil {
-			return err
-		}
 	}
 
-	wk, err := scheme.OpenWarden(payload, pass)
-	wipe(pass)
+	wk, err := unlockWarden(payload, hasPass)
 	if err != nil {
 		return err
 	}
@@ -64,6 +58,27 @@ func run() error {
 	return nil
 }
 
+// unlockWarden prompts for the passphrase (if the warden payload needs one) and
+// retries on a wrong guess, same as the vault's own password prompt.
+func unlockWarden(payload []byte, hasPass bool) (*scheme.WardenKey, error) {
+	if !hasPass {
+		return scheme.OpenWarden(payload, nil)
+	}
+	for i := 0; i < prompt.Attempts; i++ {
+		pass, err := prompt.Password("Warden passphrase: ")
+		if err != nil {
+			return nil, err
+		}
+		wk, err := scheme.OpenWarden(payload, pass)
+		prompt.Wipe(pass)
+		if err == nil {
+			return wk, nil
+		}
+		fmt.Fprintln(os.Stderr, "  !", err)
+	}
+	return nil, fmt.Errorf("too many wrong passphrase attempts")
+}
+
 func printWords(words []string) {
 	for i, w := range words {
 		fmt.Printf("%2d.%-12s", i+1, w)
@@ -73,11 +88,5 @@ func printWords(words []string) {
 	}
 	if len(words)%4 != 0 {
 		fmt.Println()
-	}
-}
-
-func wipe(b []byte) {
-	for i := range b {
-		b[i] = 0
 	}
 }

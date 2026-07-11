@@ -21,8 +21,6 @@ import (
 	"github.com/alexey-lapin/vaultwright/internal/wordcodec"
 )
 
-const passwordAttempts = 3
-
 func main() {
 	var (
 		idle     = flag.Duration("idle", 15*time.Minute, "auto-shutdown after this much inactivity (0 = never)")
@@ -95,13 +93,13 @@ func run(idle time.Duration, port int, addr string, pathKey bool, entry string, 
 }
 
 func unlockMeta(payload []byte) (*scheme.VaultMeta, error) {
-	for i := 0; i < passwordAttempts; i++ {
+	for i := 0; i < prompt.Attempts; i++ {
 		pw, err := prompt.Password("Password: ")
 		if err != nil {
 			return nil, err
 		}
 		meta, err := scheme.OpenVaultMeta(payload, pw)
-		wipe(pw)
+		prompt.Wipe(pw)
 		if err == nil {
 			return meta, nil
 		}
@@ -122,13 +120,13 @@ func handshake(meta *scheme.VaultMeta, list *wordcodec.List) (map[string][]byte,
 	fmt.Fprintln(os.Stderr, "\nRead this challenge to your warden:")
 	printWords(words)
 
-	for i := 0; i < passwordAttempts; i++ {
+	for i := 0; i < prompt.Attempts; i++ {
 		resp, err := prompt.ReadPhrase("\nEnter the 12-word response from warden", list, 12)
 		if err != nil {
 			return nil, err
 		}
 		files, err := meta.OpenAssets(ePriv, resp)
-		wipe(resp)
+		prompt.Wipe(resp)
 		if err == nil {
 			return files, nil
 		}
@@ -150,10 +148,4 @@ func printWords(words []string) {
 		b.WriteByte('\n')
 	}
 	fmt.Fprint(os.Stderr, b.String())
-}
-
-func wipe(b []byte) {
-	for i := range b {
-		b[i] = 0
-	}
 }
