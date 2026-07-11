@@ -152,8 +152,8 @@ func seal(args []string) error {
 
 	// One keypair / one payload-pair, stamped onto every requested stub.
 	vaultPayload, wardenPayload, err := scheme.Seal(o.dir, builtin.Wordlist, password, wardenPass, o.noWarden)
-	wipe(password)
-	wipe(wardenPass)
+	prompt.Wipe(password)
+	prompt.Wipe(wardenPass)
 	if err != nil {
 		return err
 	}
@@ -353,15 +353,9 @@ func readNewPassword(label string) ([]byte, error) {
 		return nil, err
 	}
 	if !bytes.Equal(first, again) {
-		wipe(again)
+		prompt.Wipe(again)
 		return nil, fmt.Errorf("passwords do not match")
 	}
-	wipe(again)
+	prompt.Wipe(again)
 	return first, nil
-}
-
-func wipe(b []byte) {
-	for i := range b {
-		b[i] = 0
-	}
 }
