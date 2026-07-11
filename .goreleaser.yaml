@@ -38,6 +38,8 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
+    files:
+      - completions/* # bash/zsh/fish completion scripts (see brews.install below)
     # Archive base name (extension added per format), e.g. vaultwright_0.0.4_darwin_arm64.tar.gz.
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
@@ -65,6 +67,9 @@ brews:
     skip_upload: auto # skip the formula push for prereleases
     install: |
       bin.install "vaultwright"
+      bash_completion.install "completions/vaultwright.bash" => "vaultwright"
+      zsh_completion.install "completions/vaultwright.zsh" => "_vaultwright"
+      fish_completion.install "completions/vaultwright.fish" => "vaultwright.fish"
     test: |
       assert_match "vaultwright", shell_output("#{bin}/vaultwright version")
 

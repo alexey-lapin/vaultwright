@@ -32,7 +32,22 @@ internal/stubs        Resolve(role,os,arch): stub-dir → embedded → cache →
 scripts/build-stubs.sh    cross-compile the stub matrix + deterministic build/SHA256SUMS
 scripts/stage-embed.sh    copy built stubs + manifest into internal/builtin/ (GoReleaser before-hook)
 scripts/stage-release-assets.sh  flatten stub asset names + SHA256SUMS into build/assets/ (GoReleaser extra_files)
+completions/          hand-written bash/zsh/fish completion scripts for vaultwright (only;
+                      vault/warden have no stable command name to bind completion to — see
+                      cmd/vaultwright's CLI parsing note below)
 ```
+
+`cmd/vaultwright` parses args with `github.com/jessevdk/go-flags` (subcommands +
+struct-tag flags) — the repo's one third-party dependency beyond `x/crypto`/`x/term`.
+It's what gives the `--vault-target`/`--warden-target`/`fetch-stubs` os/arch inputs
+real completion: go-flags detects `GO_FLAGS_COMPLETION` at runtime and prints
+candidates for whatever partial args it's called with (see the `osArch` type's
+`Complete` method, sourced from the embedded release manifest); `completions/*.{bash,zsh,fish}`
+are thin, hand-written wrappers that shell out to the binary that way — go-flags
+does not generate them. `vault`/`warden` keep their original stdlib-flag/manual
+parsing: `warden` takes no flags at all, and both stubs get an arbitrary per-seal
+output name via `seal -o`, so a completion script bound to one fixed command name
+wouldn't travel with them.
 
 ## Build / test / lint
 
