@@ -57,6 +57,11 @@ git clone https://github.com/alexey-lapin/vaultwright && cd vaultwright && make 
 > assembled by CI into the release binaries and are not in the committed source, so a
 > `go install` build can't seal.
 
+**Shell completion** — bash/zsh/fish completion for `vaultwright` itself (subcommands,
+flags, and `os/arch` targets). Installed automatically via Homebrew; for other install
+methods, grab `completions/vaultwright.<shell>` from the release archive and source it
+(e.g. `source completions/vaultwright.bash` in `~/.bashrc`).
+
 See [SECURITY.md](SECURITY.md) for the threat model and how to report issues.
 
 ## Three binaries
